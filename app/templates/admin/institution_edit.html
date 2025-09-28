@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Edit Institution: {{ institution.name }}</h2>
+
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="grid">
+    <label for="name">
+      Institution Name
+      {{ form.name(size=40) }}
+      {% if form.name.errors %}
+        {% for error in form.name.errors %}
+          <small class="muted">{{ error }}</small>
+        {% endfor %}
+      {% endif %}
+    </label>
+  </div>
+
+  <button type="submit" class="contrast">Save Changes</button>
+  <a href="{{ url_for('admin.index') }}" role="button" class="secondary">Cancel</a>
+</form>
+{% endblock %}

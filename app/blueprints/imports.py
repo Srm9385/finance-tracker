@@ -8,7 +8,7 @@ from flask import (
 )
 from ..models import Institution, Account, Mapper, Import, Transaction
 from ..forms import ImportUploadForm, ReviewDecisionForm, MappingWizardForm
-from ..services.importer import run_import
+from ..services.importer import run_import, _normalize_frame # <-- import _normalize_frame
 from ..services.review import commit_import
 from ..services.mapping import create_mapper, guess_mapping_from_headers
 from datetime import datetime
@@ -24,7 +24,7 @@ def upload():
 
     # Populate choices
     form.institution_id.choices = [
-        (i.id, i.name) for i in Institution.query.order_by(Institution.name).all()
+        (i.id, i.name) for i in Institution.query.filter_by(is_active=True).order_by(Institution.name).all()
     ]
     selected_inst = (
         form.institution_id.data
@@ -34,7 +34,7 @@ def upload():
     form.account_id.choices = (
         [
             (a.id, f"{a.name} ({a.type})")
-            for a in Account.query.filter_by(institution_id=selected_inst).order_by(Account.name)
+            for a in Account.query.filter_by(institution_id=selected_inst, is_active=True).order_by(Account.name)
         ]
         if selected_inst
         else []
@@ -59,7 +59,6 @@ def upload():
         account = Account.query.get(form.account_id.data)
         f = request.files["file"]
 
-        # If user selected an existing mapper → import immediately
         if form.mapper_id.data != -1:
             mapper = Mapper.query.get(form.mapper_id.data)
             imp, raw_bytes, review = run_import(None, f, institution, account, mapper, current_app.config)
@@ -67,7 +66,6 @@ def upload():
             flash("Parsed file. Review decisions below.", "info")
             return redirect(url_for(".review", import_id=imp.id))
 
-        # Otherwise, guess mapping and route to wizard
         raw = f.read()
         try:
             df = pd.read_csv(io.BytesIO(raw), nrows=5)
@@ -86,11 +84,11 @@ def upload():
             "institution_id": institution.id,
             "account_id": account.id,
             "original_filename": f.filename,
+            "headers": list(df.columns),
             "guessed": guessed,
         }
         return redirect(url_for(".wizard_from_upload", token=token))
 
-    # If a POST happened but validation failed, surface errors
     if request.method == "POST" and not form.validate():
         errs = "; ".join(
             f"{name}: {', '.join(msgs)}" for name, msgs in form.errors.items()
@@ -110,60 +108,83 @@ def wizard_from_upload(token):
 
     institution = Institution.query.get(cache["institution_id"])
     account = Account.query.get(cache["account_id"])
-    guessed = cache["guessed"]
 
-    form = MappingWizardForm(data={
-        "date_col": guessed["date_col"],
-        "date_fmt": guessed["date_fmt"],
-        "desc_col": guessed["desc_col"],
-        "indicator_col": guessed.get("indicator_col") or "",  # NEW
-        "amount_col": guessed["amount_col"] or "",
-        "debit_col": guessed["debit_col"] or "",
-        "credit_col": guessed["credit_col"] or "",
-        "balance_col": guessed["balance_col"] or "",
-        "exclude_pending": guessed.get("exclude_pending", False),
-    }
-)
+    # On form submission (POST), we either save and import, or just re-render to test.
+    if request.method == "POST":
+        form = MappingWizardForm(request.form)
+        # The 'action' determines if we save or just test the mapping.
+        action = request.form.get("action")
 
-    if form.validate_on_submit():
-        schema = dict(
+        if form.validate():
+            schema = dict(
+                date_col=form.date_col.data,
+                date_fmt=form.date_fmt.data,
+                desc_col=form.desc_col.data,
+                indicator_col=form.indicator_col.data or None,
+                amount_col=form.amount_col.data or None,
+                debit_col=form.debit_col.data or None,
+                credit_col=form.credit_col.data or None,
+                balance_col=form.balance_col.data or None,
+                exclude_pending=form.exclude_pending.data,
+            )
+
+            # If the action is to save, we create the mapper and run the import.
+            if action == "save_and_import":
+                mapper = create_mapper(institution.id, account.id, schema)
+                raw_bytes = cache["raw"]
+
+                class _FileStorageMock:
+                    filename = cache["original_filename"]
+                    def read(self): return raw_bytes
+
+                imp, raw_bytes_out, review = run_import(None, _FileStorageMock(), institution, account, mapper, current_app.config)
+                current_app.config["_IMPORT_CACHE"].pop(token, None)
+                current_app.config["_IMPORT_CACHE"][imp.id] = raw_bytes_out
+
+                flash(f"Mapping v{mapper.version} created and applied. Review import below.", "success")
+                return redirect(url_for(".review", import_id=imp.id))
+
+            # Otherwise (if action is 'test' or not specified), we fall through to the GET logic
+            # to re-render the page with an updated preview.
+    else: # GET request
+        guessed = cache["guessed"]
+        form = MappingWizardForm(data=guessed)
+
+    # This part runs for both GET requests and for POST requests that aren't saving.
+    # It generates the preview.
+    preview_rows = []
+    try:
+        # Get the current schema from the form (either from 'guessed' on GET, or from user input on POST).
+        current_schema = dict(
             date_col=form.date_col.data,
             date_fmt=form.date_fmt.data,
             desc_col=form.desc_col.data,
-            indicator_col=form.indicator_col.data or None,  # NEW
-            amount_col=form.amount_col.data or None,
-            debit_col=form.debit_col.data or None,
-            credit_col=form.credit_col.data or None,
-            balance_col=form.balance_col.data or None,
-            exclude_pending=form.exclude_pending.data,
+            indicator_col=form.indicator_col.data,
+            amount_col=form.amount_col.data,
+            debit_col=form.debit_col.data,
+            credit_col=form.credit_col.data,
+            balance_col=form.balance_col.data
         )
-        # Create a mapper version for this account/institution
-        mapper = create_mapper(institution.id, account.id, schema)
+        df = pd.read_csv(io.BytesIO(cache['raw']), nrows=5)
+        preview_rows = _normalize_frame(df, current_schema)
+    except Exception as e:
+        flash(f"Could not generate preview with current settings: {e}", "error")
 
-        # Proceed with original raw bytes to import using the new mapper
-        raw_bytes = cache["raw"]
-
-        class _FS:
-            filename = cache["original_filename"]
-
-            def read(self_inner):
-                return raw_bytes
-
-        imp, raw_bytes, review = run_import(None, _FS(), institution, account, mapper, current_app.config)
-        # swap token for import id in cache
-        current_app.config["_IMPORT_CACHE"].pop(token, None)
-        current_app.config["_IMPORT_CACHE"][imp.id] = raw_bytes
-
-        flash(f"Mapping v{mapper.version} created and applied. Review import below.", "success")
-        return redirect(url_for(".review", import_id=imp.id))
 
     return render_template(
         "admin/mapper_edit.html",
         form=form,
-        institution_id=institution.id,
-        account_id=account.id,
+        institution=institution,
+        account=account,
+        token=token,
+        headers=cache.get("headers", []),
+        preview_rows=preview_rows,
     )
 
+
+# ... (rest of the file: review, log, history, commit, delete_import_txns) ...
+# Note: No changes are needed for the rest of the functions in this file.
+# The original functions for review, log, etc., are left as they were.
 
 @bp.route("/review/<int:import_id>", methods=["GET", "POST"])
 def review(import_id):

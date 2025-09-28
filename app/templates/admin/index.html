@@ -16,10 +16,36 @@
 
   <hr/>
   <table>
-    <thead><tr><th>Name</th><th>Created</th></tr></thead>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
     <tbody>
       {% for it in institutions %}
-      <tr><td>{{ it.name }}</td><td class="muted">{{ it.created_at }}</td></tr>
+      <tr>
+        <td>{{ it.name }}</td>
+        <td>
+          {% if it.is_active %}
+            <span style="color: green;">Active</span>
+          {% else %}
+            <span class="muted">Inactive</span>
+          {% endif %}
+        </td>
+        <td class="muted">{{ it.created_at.strftime('%Y-%m-%d') }}</td>
+        <td>
+          <a href="{{ url_for('admin.institution_edit', institution_id=it.id) }}" role="button" class="secondary outline">Edit</a>
+          <form method="post" action="{{ url_for('admin.institution_toggle_active', institution_id=it.id) }}" style="display: inline-block; margin-left: 0.5rem;">
+            {{ csrf_form.hidden_tag() }}
+            <button type="submit" class="secondary outline">
+              {{ 'Deactivate' if it.is_active else 'Activate' }}
+            </button>
+          </form>
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>
@@ -40,14 +66,39 @@
 
   <hr/>
   <table>
-    <thead><tr><th>Institution</th><th>Account</th><th>Type</th><th>Mapper</th></tr></thead>
+    <thead>
+      <tr>
+        <th>Institution</th>
+        <th>Account</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Mapper</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
     <tbody>
     {% for a in accounts %}
       <tr>
         <td>{{ a.institution.name }}</td>
         <td>{{ a.name }}</td>
         <td>{{ a.type }}</td>
+        <td>
+          {% if a.is_active %}
+            <span style="color: green;">Active</span>
+          {% else %}
+            <span class="muted">Inactive</span>
+          {% endif %}
+        </td>
         <td><a href="{{ url_for('admin.mapper_new', institution_id=a.institution_id, account_id=a.id) }}">Add/Update Mapping</a></td>
+        <td>
+          <a href="{{ url_for('admin.account_edit', account_id=a.id) }}" role="button" class="secondary outline">Edit</a>
+          <form method="post" action="{{ url_for('admin.account_toggle_active', account_id=a.id) }}" style="display: inline-block; margin-left: 0.5rem;">
+            {{ csrf_form.hidden_tag() }}
+            <button type="submit" class="secondary outline">
+              {{ 'Deactivate' if a.is_active else 'Activate' }}
+            </button>
+          </form>
+        </td>
       </tr>
     {% endfor %}
     </tbody>

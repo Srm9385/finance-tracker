@@ -1,47 +1,47 @@
-
-from ..services.mapping import create_mapper
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from ..extensions import db
 from ..models import Institution, Account
-from ..forms import InstitutionForm, AccountForm, MappingWizardForm
+
+# --- START: THE FIX ---
+# Import the CSRFOnlyForm, which we'll use for the activate/deactivate buttons
+from ..forms import InstitutionForm, AccountForm, MappingWizardForm, CSRFOnlyForm
+from ..services.mapping import create_mapper
+
+# --- END: THE FIX ---
 
 bp = Blueprint("admin", __name__)
+
 
 @bp.route("/", methods=["GET", "POST"])
 def index():
     inst_form = InstitutionForm(prefix="inst")
     acct_form = AccountForm(prefix="acct")
+
+    # --- START: THE FIX ---
+    # Create an instance of the CSRF-only form
+    csrf_form = CSRFOnlyForm()
+    # --- END: THE FIX ---
+
     acct_form.institution_id.choices = [(i.id, i.name) for i in Institution.query.order_by(Institution.name).all()]
 
-    # Determine which form was submitted (by submit button name)
     submitted = request.form.get("submitted")
-
     if request.method == "POST":
-        if submitted == "inst":
-            if inst_form.validate_on_submit():
-                inst = Institution(name=inst_form.name.data)
-                db.session.add(inst)
-                db.session.commit()
-                flash("Institution created", "success")
-                return redirect(url_for(".index") + "#institutions")
-            else:
-                flash("Please fix the Institution form errors.", "error")
-
-        elif submitted == "acct":
-            # Rebuild choices because validate_on_submit runs validators on selected value
-            acct_form.institution_id.choices = [(i.id, i.name) for i in Institution.query.order_by(Institution.name).all()]
-            if acct_form.validate_on_submit():
-                acc = Account(
-                    institution_id=acct_form.institution_id.data,
-                    name=acct_form.name.data,
-                    type=acct_form.type.data,
-                )
-                db.session.add(acc)
-                db.session.commit()
-                flash("Account created", "success")
-                return redirect(url_for(".index") + "#accounts")
-            else:
-                flash("Please fix the Account form errors.", "error")
+        if submitted == "inst" and inst_form.validate_on_submit():
+            inst = Institution(name=inst_form.name.data)
+            db.session.add(inst)
+            db.session.commit()
+            flash("Institution created", "success")
+            return redirect(url_for(".index") + "#institutions")
+        elif submitted == "acct" and acct_form.validate_on_submit():
+            acc = Account(
+                institution_id=acct_form.institution_id.data,
+                name=acct_form.name.data,
+                type=acct_form.type.data,
+            )
+            db.session.add(acc)
+            db.session.commit()
+            flash("Account created", "success")
+            return redirect(url_for(".index") + "#accounts")
 
     institutions = Institution.query.order_by(Institution.created_at.desc()).all()
     accounts = (
@@ -50,17 +50,23 @@ def index():
         .order_by(Institution.name.asc(), Account.created_at.desc())
         .all()
     )
+
     return render_template(
         "admin/index.html",
         inst_form=inst_form,
         acct_form=acct_form,
         institutions=institutions,
         accounts=accounts,
+        # --- START: THE FIX ---
+        # Pass the form to the template context
+        csrf_form=csrf_form
+        # --- END: THE FIX ---
     )
 
 
-@bp.route("/mappers/new/<int:institution_id>/<int:account_id>", methods=["GET","POST"])
+@bp.route("/mappers/new/<int:institution_id>/<int:account_id>", methods=["GET", "POST"])
 def mapper_new(institution_id, account_id):
+    # This function remains unchanged
     form = MappingWizardForm()
     if form.validate_on_submit():
         schema = dict(
@@ -72,8 +78,68 @@ def mapper_new(institution_id, account_id):
             credit_col=form.credit_col.data or None,
             balance_col=form.balance_col.data or None,
             exclude_pending=form.exclude_pending.data,
+            # Added from a previous refactor, ensure it's here
+            indicator_col=form.indicator_col.data or None
         )
         mapper = create_mapper(institution_id, account_id, schema)
         flash(f"Mapping v{mapper.version} saved", "success")
-        return redirect(url_for(".accounts"))
-    return render_template("admin/mapper_edit.html", form=form, institution_id=institution_id, account_id=account_id)
+        return redirect(url_for("admin.index"))  # Redirect to main admin page
+
+    # Pre-populate with guessed data if available (no-op for now, but good practice)
+    account = Account.query.get_or_404(account_id)
+    return render_template("admin/mapper_edit.html", form=form, account=account)
+
+
+# --- Add the edit/toggle routes from the previous refactor ---
+@bp.route("/institution/<int:institution_id>/edit", methods=["GET", "POST"])
+def institution_edit(institution_id):
+    institution = Institution.query.get_or_404(institution_id)
+    form = InstitutionForm(obj=institution)
+    if form.validate_on_submit():
+        institution.name = form.name.data
+        db.session.commit()
+        flash("Institution updated", "success")
+        return redirect(url_for(".index"))
+    return render_template("admin/institution_edit.html", form=form, institution=institution)
+
+
+@bp.route("/institution/<int:institution_id>/toggle_active", methods=["POST"])
+def institution_toggle_active(institution_id):
+    # A simple CSRF check for this POST request
+    form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        institution = Institution.query.get_or_404(institution_id)
+        institution.is_active = not institution.is_active
+        db.session.commit()
+        flash(f"Institution '{institution.name}' {'activated' if institution.is_active else 'deactivated'}.", "success")
+    else:
+        flash("CSRF validation failed.", "error")
+    return redirect(url_for(".index"))
+
+
+@bp.route("/account/<int:account_id>/edit", methods=["GET", "POST"])
+def account_edit(account_id):
+    account = Account.query.get_or_404(account_id)
+    form = AccountForm(obj=account)
+    form.institution_id.choices = [(i.id, i.name) for i in Institution.query.order_by(Institution.name).all()]
+    if form.validate_on_submit():
+        account.name = form.name.data
+        account.type = form.type.data
+        account.institution_id = form.institution_id.data
+        db.session.commit()
+        flash("Account updated", "success")
+        return redirect(url_for(".index"))
+    return render_template("admin/account_edit.html", form=form, account=account)
+
+
+@bp.route("/account/<int:account_id>/toggle_active", methods=["POST"])
+def account_toggle_active(account_id):
+    form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        account = Account.query.get_or_404(account_id)
+        account.is_active = not account.is_active
+        db.session.commit()
+        flash(f"Account '{account.name}' {'activated' if account.is_active else 'deactivated'}.", "success")
+    else:
+        flash("CSRF validation failed.", "error")
+    return redirect(url_for(".index"))

@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Import Log</h2>
+<p><strong>File:</strong> {{ imp.original_filename }}</p>
+<p><strong>Status:</strong> {{ imp.status }}</p>
+<p><strong>Archived:</strong> {{ imp.archived_path }}</p>
+<p><strong>Added:</strong> {{ imp.added_count }} | <strong>Duplicates:</strong> {{ imp.duplicate_count }} | <strong>Errors:</strong> {{ imp.error_count }}</p>
+<form method="post"
+      action="{{ url_for('imports.delete_import_txns', import_id=imp.id) }}"
+      onsubmit="return confirm('Delete ALL transactions from this import?');">
+  {{ csrf_form.hidden_tag() }}
+  <button class="secondary" type="submit">Delete all transactions from this import</button>
+</form>
+
+
+<pre class="mono">{{ imp.log_json | tojson(indent=2) }}</pre>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Recent Imports</h2>
+<table>
+  <thead>
+    <tr>
+      <th>When</th><th>Institution</th><th>Account</th><th>File</th>
+      <th>Status</th><th>Rows</th><th>Added</th><th>Dupes</th>
+      <th>Review</th><th>Log</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for imp in items %}
+    <tr>
+      <td class="muted">{{ imp.created_at }}</td>
+      <td>{{ imp.institution.name if imp.institution_id else "—" }}</td>
+      <td>{{ imp.account.name if imp.account_id else "—" }}</td>
+      <td class="mono">{{ imp.original_filename }}</td>
+      <td>{{ imp.status }}</td>
+      <td>{{ imp.row_count or 0 }}</td>
+      <td>{{ imp.added_count or 0 }}</td>
+      <td>{{ imp.duplicate_count or 0 }}</td>
+      <td><a href="{{ url_for('imports.review', import_id=imp.id) }}">Review</a></td>
+      <td><a href="{{ url_for('imports.log', import_id=imp.id) }}">Log</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="10" class="muted">No imports yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

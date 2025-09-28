@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Dashboard</h2>
+<h3>Accounts</h3>
+<table>
+  <thead><tr><th>Institution</th><th>Account</th><th>Type</th><th class="mono">Balance</th></tr></thead>
+  <tbody>
+    {% for row in balances %}
+    <tr>
+      <td>{{ row.account.institution.name }}</td>
+        <td>
+          <a href="{{ url_for('transactions.list_for_account', account_id=row.account.id) }}">
+            {{ row.account.name }}
+          </a>
+        </td>
+    <td>{{ row.account.type }}</td>
+      <td class="mono">{{ "%.2f"|format(row.balance) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h3>Month-to-date Spend</h3>
+<p class="mono">${{ "%.2f"|format(mtd) }}</p>
+{% endblock %}

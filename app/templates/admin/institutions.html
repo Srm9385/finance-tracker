@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Institutions</h2>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div>{{ form.name.label }} {{ form.name() }}</div>
+  <div>{{ form.submit(class="contrast") }}</div>
+</form>
+
+<hr/>
+<table>
+  <thead><tr><th>Name</th><th>Created</th></tr></thead>
+  <tbody>
+    {% for it in items %}
+    <tr><td>{{ it.name }}</td><td class="muted">{{ it.created_at }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

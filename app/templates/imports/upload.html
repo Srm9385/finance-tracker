@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Import CSV</h2>
+<form method="post" enctype="multipart/form-data">
+  {{ form.hidden_tag() }}
+  <div>{{ form.institution_id.label }} {{ form.institution_id() }}</div>
+  <div>{{ form.account_id.label }} {{ form.account_id() }}</div>
+  <div>{{ form.mapper_id.label }} {{ form.mapper_id() }}
+  <small class="muted">Leave on “Guess from CSV (no mapping)” to auto-detect columns and confirm in the wizard.</small>
+</div>
+  <div>{{ form.file.label }} {{ form.file() }}</div>
+  <div>{{ form.submit(class="contrast") }}</div>
+</form>
+{% endblock %}

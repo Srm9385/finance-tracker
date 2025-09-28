@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ account.institution.name }} — {{ account.name }}</h2>
+
+<form method="get" class="grid">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search description…">
+  <select name="sort">
+    <option value="date_desc" {{ 'selected' if sort=='date_desc' else '' }}>Newest first</option>
+    <option value="date_asc"  {{ 'selected' if sort=='date_asc' else '' }}>Oldest first</option>
+    <option value="amount_desc" {{ 'selected' if sort=='amount_desc' else '' }}>Amount ↓</option>
+    <option value="amount_asc"  {{ 'selected' if sort=='amount_asc' else '' }}>Amount ↑</option>
+  </select>
+  <select name="per_page">
+    {% for n in [25,50,100,200] %}
+      <option value="{{ n }}" {{ 'selected' if per_page==n else '' }}>{{ n }} / page</option>
+    {% endfor %}
+  </select>
+  <button class="secondary" type="submit">Apply</button>
+</form>
+
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Description</th>
+      <th class="mono">Amount</th>
+      <th>Import</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for t in items.items %}
+    <tr>
+      <td>{{ t.txn_date }}</td>
+      <td>{{ t.description_raw }}</td>
+      <td class="mono">{{ "%.2f"|format(t.amount_cents/100) }}</td>
+      <td><a href="{{ url_for('imports.log', import_id=t.import_id) }}">#{{ t.import_id }}</a></td>
+      <td>
+        <form method="post"
+      action="{{ url_for('transactions.delete_single', txn_id=t.id, page=items.page, sort=sort, q=q) }}"
+      onsubmit="return confirm('Delete this transaction?');">
+  {{ csrf_form.hidden_tag() }}
+  <button class="secondary" type="submit">Delete</button>
+</form>
+
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">No transactions match.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<nav>
+  <ul>
+    {% if items.has_prev %}
+      <li><a href="{{ url_for('transactions.list_for_account', account_id=account.id, page=items.prev_num, sort=sort, q=q, per_page=per_page) }}">Previous</a></li>
+    {% endif %}
+    <li>Page {{ items.page }} / {{ items.pages or 1 }}</li>
+    {% if items.has_next %}
+      <li><a href="{{ url_for('transactions.list_for_account', account_id=account.id, page=items.next_num, sort=sort, q=q, per_page=per_page) }}">Next</a></li>
+    {% endif %}
+  </ul>
+</nav>
+{% endblock %}

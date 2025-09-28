@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Mapping Wizard (Account {{ account_id }})</h2>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div>{{ form.date_col.label }} {{ form.date_col() }}</div>
+  <div>{{ form.date_fmt.label }} {{ form.date_fmt(value="%m/%d/%Y") }}</div>
+  <div>{{ form.desc_col.label }} {{ form.desc_col() }}</div>
+
+  <!-- NEW: indicator field -->
+  <div>{{ form.indicator_col.label }} {{ form.indicator_col() }}</div>
+
+  <div>{{ form.amount_col.label }} {{ form.amount_col() }}</div>
+  <p class="muted">If your CSV uses separate Debit/Credit columns, leave Amount blank and fill below:</p>
+  <div>{{ form.debit_col.label }} {{ form.debit_col() }}</div>
+  <div>{{ form.credit_col.label }} {{ form.credit_col() }}</div>
+  <div>{{ form.balance_col.label }} {{ form.balance_col() }}</div>
+  <div>{{ form.exclude_pending() }} {{ form.exclude_pending.label }}</div>
+  <div><button class="contrast" type="submit">Save Mapping</button></div>
+</form>
+{% endblock %}

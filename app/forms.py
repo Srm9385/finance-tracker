@@ -1,0 +1,62 @@
+from wtforms import StringField, SelectField, FileField, BooleanField, TextAreaField, SubmitField
+from wtforms.validators import DataRequired
+from flask_wtf import FlaskForm
+from wtforms import SubmitField
+
+ACCOUNT_TYPES = [
+    ("checking","Checking"),
+    ("savings","Savings"),
+    ("credit_card","Credit Card"),
+    ("loan","Loan"),
+    ("retirement","Retirement"),
+]
+
+class InstitutionForm(FlaskForm):
+    name = StringField("Institution Name", validators=[DataRequired()])
+    submit = SubmitField("Save")
+
+class AccountForm(FlaskForm):
+    institution_id = SelectField("Institution", coerce=int, validators=[DataRequired()])
+    name = StringField("Account Name", validators=[DataRequired()])
+    type = SelectField("Type", choices=ACCOUNT_TYPES, validators=[DataRequired()])
+    submit = SubmitField("Save")
+
+class MappingWizardForm(FlaskForm):
+    date_col = StringField("Date Column", validators=[DataRequired()])
+    date_fmt = StringField("Date Format (e.g. %m/%d/%Y)", validators=[DataRequired()])
+    desc_col = StringField("Description Column", validators=[DataRequired()])
+
+    # NEW: optional indicator column (e.g. "Credit Debit Indicator")
+    indicator_col = StringField("Indicator Column (e.g. Credit/Debit)", render_kw={"placeholder": "Credit Debit Indicator"})
+
+    amount_col = StringField("Amount Column (signed or net)")
+    debit_col = StringField("Debit Column (optional)")
+    credit_col = StringField("Credit Column (optional)")
+    balance_col = StringField("Running Balance Column (optional)")
+    exclude_pending = BooleanField("Exclude Pending Rows")
+    submit = SubmitField("Save Mapping")
+
+
+class ImportUploadForm(FlaskForm):
+    institution_id = SelectField("Institution", coerce=int, validators=[DataRequired()])
+    account_id = SelectField("Account", coerce=int, validators=[DataRequired()])
+
+    # Use a sentinel value -1 to represent "no mapper / guess from CSV".
+    # Using coerce=int with an empty string causes a ValueError before validators run.
+    mapper_id = SelectField(
+        "Mapping Version",
+        coerce=int,
+        default=-1,            # sentinel
+    )
+
+    file = FileField("CSV File", validators=[DataRequired()])
+    submit = SubmitField("Upload")
+
+class ReviewDecisionForm(FlaskForm):
+    decisions_json = TextAreaField("Decisions JSON")
+    submit = SubmitField("Commit Import")
+
+
+class CSRFOnlyForm(FlaskForm):
+    submit = SubmitField("Submit")
+

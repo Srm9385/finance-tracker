@@ -6,4 +6,3 @@ dedup (primary + ±10-day secondary), transfer detection (±2 days), archive+gzi
 Import Review UI, and a basic Dashboard.
 
 ## Quickstart
-(see full instructions in the chat message or inline code comments)

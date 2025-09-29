@@ -93,6 +93,8 @@ def _revive_if_deleted(imp: Import, rows: List[Dict[str, Any]]) -> int:
 
 # ----- main entrypoint -------------------------------------------------------
 
+# ----- main entrypoint -------------------------------------------------------
+
 def commit_import(
     imp: Import,
     raw_bytes: bytes,
@@ -103,16 +105,28 @@ def commit_import(
 ) -> None:
     """
     Finalize an import:
-      - optionally revive soft-deleted matches (if decisions['revive_deleted'] is True)
-      - mark accepted transfers as is_transfer=True
-      - insert remaining to_insert rows
-      - gzip/archive the original CSV
-      - update Import counters/status/log
+      - handle user decisions on secondary duplicates.
+      - optionally revive soft-deleted matches.
+      - mark accepted transfers as is_transfer=True.
+      - insert remaining rows.
+      - gzip/archive the original CSV.
+      - update Import counters/status/log.
     """
     review = imp.log_json.get("review", {}) if imp.log_json else {}
     to_insert: List[Dict[str, Any]] = list(review.get("to_insert", []))
     row_count = int(review.get("row_count") or len(to_insert) or 0)
 
+
+    # --- MODIFICATION START ---
+    # Handle user-approved secondary duplicates
+    approved_dup_indices = set(decisions.get("accepted_secondary_duplicates") or [])
+    if approved_dup_indices:
+        secondary_duplicates = list(review.get("dup_secondary", []))
+        for idx in approved_dup_indices:
+            # Check index is valid
+            if 0 <= idx < len(secondary_duplicates):
+                # Add the 'new' transaction from the duplicate pair to our insert list
+                to_insert.append(secondary_duplicates[idx]["new"])
     # Optional: revive previously soft-deleted duplicates instead of inserting
     revived = 0
     if decisions.get("revive_deleted"):

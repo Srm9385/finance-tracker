@@ -72,3 +72,12 @@ class Transaction(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     deleted_at = db.Column(db.DateTime)
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), index=True, nullable=True)
+    category = db.relationship("Category", lazy="joined")
+
+class Category(db.Model):
+    __tablename__ = "categories"
+    id = db.Column(db.Integer, primary_key=True)
+    group = db.Column(db.Text, nullable=False)
+    name = db.Column(db.Text, nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)

@@ -187,13 +187,12 @@ def run_import(user, file_storage, institution, account, mapper, app_config):
     transfer_candidates = detect_transfers(to_insert, account.id)
 
     review = {
-        "to_insert": to_insert,
-        "dup_exact": [{"new": n, "existing_id": e.id} for (n, e) in dup_exact],
-        "dup_secondary": [{"new": n, "existing_id": e.id} for (n, e) in dup_secondary],
-        # keep the dicts with new_index so the UI can point back into to_insert
-        "transfer_candidates": transfer_candidates,
-        "row_count": len(normalized),
-        "parse_errors": [],
+            "to_insert": to_insert,
+            "dup_exact": [{"new": n, "existing_id": e.id} for (n, e) in dup_exact],
+            "dup_secondary": [{"new": n, "existing_id": e.id} for (n, e) in dup_secondary],
+            "transfer_candidates": transfer_candidates,
+            "row_count": len(normalized),
+            "parse_errors": [],
     }
 
     # If an Import with same sha+account already exists, REUSE it

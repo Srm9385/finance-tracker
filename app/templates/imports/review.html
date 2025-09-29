@@ -49,13 +49,40 @@
     </tbody>
   </table>
 
-  <h3>Exact Duplicates</h3>
+<h3>Exact Duplicates</h3>
   <p class="muted">Shown for reference; these won’t be inserted.</p>
+  {# You can optionally add a table here to display review.dup_exact if needed #}
 
-  <h3>Secondary Duplicates</h3>
-  <p class="muted">Shown for reference. Consider adjusting mapping if formats differ.</p>
+  <h3>Secondary Duplicates (±10 days)</h3>
+  <p>These transactions are similar to existing ones. Check the box to import them anyway.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>New Txn (from CSV)</th>
+        <th>Existing Match (in DB)</th>
+        <th>Import Anyway</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for pair in review.dup_secondary %}
+      <tr>
+        <td>
+          {{ pair.new.txn_date }} |
+          {{ pair.new.description_raw }} |
+          {{ "%.2f"|format(pair.new.amount_cents/100) }}
+        </td>
+        <td>ID {{ pair.existing_id }}</td>
+        {# The index here refers to the item's position in the dup_secondary list #}
+        <td><input type="checkbox" class="sec-dup" data-sec-index="{{ loop.index0 }}"/></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3" class="muted">No secondary duplicates found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {# MODIFICATION END #}
 
-  <!-- Primary action -->
+
   <button class="contrast" type="submit">Commit Import</button>
 
   <!-- Fallback one-click commit if form/JS has issues -->
@@ -76,14 +103,25 @@
   const reviveEl = document.getElementById('revive_deleted');
 
   form.addEventListener('submit', function() {
-    const accepted = [];
+    // --- For transfers (existing code) ---
+    const accepted_xfers = [];
     document.querySelectorAll('.xfer:checked').forEach(function(cb) {
-      const idx = parseInt(cb.dataset.newIndex);  // read new_index from payload
-      if (!Number.isNaN(idx)) accepted.push(idx);
+      const idx = parseInt(cb.dataset.newIndex);
+      if (!Number.isNaN(idx)) accepted_xfers.push(idx);
     });
 
+    // --- NEW: For secondary duplicates ---
+    const accepted_dups = [];
+    document.querySelectorAll('.sec-dup:checked').forEach(function(cb) {
+      const idx = parseInt(cb.dataset.secIndex);
+      if (!Number.isNaN(idx)) accepted_dups.push(idx);
+    });
+    // --- END NEW ---
+
     const payload = {
-      accepted_transfers: accepted,
+      accepted_transfers: accepted_xfers,
+      // NEW: Add the accepted duplicates to the payload
+      accepted_secondary_duplicates: accepted_dups,
       revive_deleted: !!(reviveEl && reviveEl.checked)
     };
     decisionsEl.value = JSON.stringify(payload);

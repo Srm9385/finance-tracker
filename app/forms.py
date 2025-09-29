@@ -1,7 +1,7 @@
-from wtforms import StringField, SelectField, FileField, BooleanField, TextAreaField, SubmitField
+from wtforms import SubmitField
+from wtforms import StringField, SelectField, FileField, BooleanField, TextAreaField, SubmitField, DateField, DecimalField
 from wtforms.validators import DataRequired
 from flask_wtf import FlaskForm
-from wtforms import SubmitField
 
 ACCOUNT_TYPES = [
     ("checking","Checking"),
@@ -60,3 +60,13 @@ class ReviewDecisionForm(FlaskForm):
 class CSRFOnlyForm(FlaskForm):
     submit = SubmitField("Submit")
 
+class CategoryForm(FlaskForm):
+    group = StringField("Category Group", validators=[DataRequired()])
+    name = StringField("Category Name", validators=[DataRequired()])
+    submit = SubmitField("Save Category")
+
+class ManualTransactionForm(FlaskForm):
+    txn_date = DateField("Date", validators=[DataRequired()], format='%Y-%m-%d')
+    description_raw = StringField("Description", validators=[DataRequired()], default="Balance Adjustment")
+    amount = DecimalField("Amount", validators=[DataRequired()], places=2)
+    submit = SubmitField("Add Manual Transaction")

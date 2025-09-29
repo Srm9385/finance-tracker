@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Edit Category: {{ category.name }}</h2>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="grid">
+    <label>{{ form.group.label }} {{ form.group() }}</label>
+    <label>{{ form.name.label }} {{ form.name() }}</label>
+  </div>
+  <button type="submit" class="contrast">Save Changes</button>
+  <a href="{{ url_for('admin.categories') }}" role="button" class="secondary">Cancel</a>
+</form>
+{% endblock %}

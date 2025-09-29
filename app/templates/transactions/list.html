@@ -2,6 +2,10 @@
 {% block content %}
 <h2>{{ account.institution.name }} — {{ account.name }}</h2>
 
+<div style="margin-bottom: 1rem;">
+  <a href="{{ url_for('transactions.add_manual', account_id=account.id) }}" role="button">Add Manual Transaction</a>
+</div>
+
 <form method="get" class="grid">
   <input type="text" name="q" value="{{ q }}" placeholder="Search description…">
   <select name="sort">
@@ -19,36 +23,57 @@
 </form>
 
 <table>
-  <thead>
-    <tr>
-      <th>Date</th>
-      <th>Description</th>
-      <th class="mono">Amount</th>
-      <th>Import</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-  <tbody>
-  {% for t in items.items %}
-    <tr>
-      <td>{{ t.txn_date }}</td>
-      <td>{{ t.description_raw }}</td>
-      <td class="mono">{{ "%.2f"|format(t.amount_cents/100) }}</td>
-      <td><a href="{{ url_for('imports.log', import_id=t.import_id) }}">#{{ t.import_id }}</a></td>
+<thead>
+  <tr>
+    <th>Date</th>
+    <th>Description</th>
+    <th class="mono">Amount</th>
+    <th>Category</th> {# NEW COLUMN HEADER #}
+    <th>Import</th>
+    <th>Actions</th>
+  </tr>
+</thead>
+<tbody>
+{% for t in items.items %}
+  <tr>
+    <td>{{ t.txn_date }}</td>
+    <td>{{ t.description_raw }}</td>
+    <td class="mono">{{ "%.2f"|format(t.amount_cents/100) }}</td>
+    {# NEW COLUMN FOR CATEGORY DROPDOWN #}
+    <td>
+      <form method="post" action="{{ url_for('transactions.set_category', txn_id=t.id, page=items.page, sort=sort, q=q) }}">
+        {{ csrf_form.hidden_tag() }}
+        <select name="category_id" onchange="this.form.submit()">
+          <option value="None">-- None --</option>
+          {% for cat in categories %}
+            <option value="{{ cat.id }}" {{ 'selected' if t.category_id == cat.id else '' }}>
+              {{ cat.group }} / {{ cat.name }}
+            </option>
+          {% endfor %}
+        </select>
+      </form>
+    </td>
       <td>
-        <form method="post"
-      action="{{ url_for('transactions.delete_single', txn_id=t.id, page=items.page, sort=sort, q=q) }}"
-      onsubmit="return confirm('Delete this transaction?');">
-  {{ csrf_form.hidden_tag() }}
-  <button class="secondary" type="submit">Delete</button>
-</form>
+      {% if t.import_id %}
+        <a href="{{ url_for('imports.log', import_id=t.import_id) }}">#{{ t.import_id }}</a>
+      {% else %}
+        <span class="muted">Manual</span>
+      {% endif %}
+    </td>
+    <td>
+      <form method="post"
+        action="{{ url_for('transactions.delete_single', txn_id=t.id, page=items.page, sort=sort, q=q) }}"
+        onsubmit="return confirm('Delete this transaction?');">
+        {{ csrf_form.hidden_tag() }}
+        <button class="secondary" type="submit">Delete</button>
+      </form>
+    </td>
+  </tr>
+{% else %}
+  <tr><td colspan="6" class="muted">No transactions match.</td></tr> {# UPDATE COLSPAN #}
+{% endfor %}
+</tbody>
 
-      </td>
-    </tr>
-  {% else %}
-    <tr><td colspan="5" class="muted">No transactions match.</td></tr>
-  {% endfor %}
-  </tbody>
 </table>
 
 <nav>

@@ -1,11 +1,8 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from ..extensions import db
-from ..models import Institution, Account
-
-# --- START: THE FIX ---
-# Import the CSRFOnlyForm, which we'll use for the activate/deactivate buttons
-from ..forms import InstitutionForm, AccountForm, MappingWizardForm, CSRFOnlyForm
 from ..services.mapping import create_mapper
+from ..models import Institution, Account, Category
+from ..forms import InstitutionForm, AccountForm, MappingWizardForm, CSRFOnlyForm, CategoryForm
 
 # --- END: THE FIX ---
 
@@ -143,3 +140,49 @@ def account_toggle_active(account_id):
     else:
         flash("CSRF validation failed.", "error")
     return redirect(url_for(".index"))
+
+@bp.route("/categories", methods=["GET", "POST"])
+def categories():
+    """Route for listing and creating categories."""
+    form = CategoryForm()
+    if form.validate_on_submit():
+        new_cat = Category(group=form.group.data, name=form.name.data)
+        db.session.add(new_cat)
+        db.session.commit()
+        flash(f"Category '{new_cat.name}' created.", "success")
+        return redirect(url_for(".categories"))
+
+    all_categories = Category.query.order_by(Category.group, Category.name).all()
+    return render_template("admin/categories.html", form=form, categories=all_categories)
+
+
+@bp.route("/category/<int:category_id>/edit", methods=["GET", "POST"])
+def category_edit(category_id):
+    """Route for editing a category."""
+    category = Category.query.get_or_404(category_id)
+    form = CategoryForm(obj=category)
+    if form.validate_on_submit():
+        category.group = form.group.data
+        category.name = form.name.data
+        db.session.commit()
+        flash(f"Category '{category.name}' updated.", "success")
+        return redirect(url_for(".categories"))
+    return render_template("admin/category_edit.html", form=form, category=category)
+
+
+@bp.route("/category/<int:category_id>/delete", methods=["POST"])
+def category_delete(category_id):
+    """Route for deleting a category."""
+    form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        category = Category.query.get_or_404(category_id)
+        # Check if any transactions are using this category
+        if Transaction.query.filter_by(category_id=category.id).first():
+            flash(f"Cannot delete category '{category.name}' as it is in use.", "error")
+        else:
+            db.session.delete(category)
+            db.session.commit()
+            flash(f"Category '{category.name}' deleted.", "success")
+    else:
+        flash("CSRF validation failed.", "error")
+    return redirect(url_for(".categories"))

@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Manage Categories</h2>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="grid">
+    <label>{{ form.group.label }} {{ form.group() }}</label>
+    <label>{{ form.name.label }} {{ form.name() }}</label>
+  </div>
+  {{ form.submit(class="contrast") }}
+</form>
+
+<hr/>
+
+<table>
+  <thead>
+    <tr>
+      <th>Group</th>
+      <th>Name</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for cat in categories %}
+    <tr>
+      <td>{{ cat.group }}</td>
+      <td>{{ cat.name }}</td>
+      <td>
+        <a href="{{ url_for('admin.category_edit', category_id=cat.id) }}" role="button" class="secondary outline">Edit</a>
+        <form method="post" action="{{ url_for('admin.category_delete', category_id=cat.id) }}" style="display: inline-block; margin-left: 0.5rem;" onsubmit="return confirm('Are you sure you want to delete this category?');">
+          {{ csrf_form.hidden_tag() }} {# Assumes csrf_form is passed, which we will need to add #}
+          <button type="submit" class="secondary outline">Delete</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr>
+      <td colspan="3" class="muted">No categories created yet.</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

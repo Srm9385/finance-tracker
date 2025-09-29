@@ -19,6 +19,9 @@
       <li><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
       <li><a href="{{ url_for('imports.upload') }}">Import</a></li>
         <li><a href="{{ url_for('imports.history') }}">Import History</a></li>
+        {% if g.ai_configured %}
+      <li><a href="{{ url_for('ai.categorize') }}">AI Categorizer</a></li>
+      {% endif %}
       <li><a href="{{ url_for('admin.index') }}">Admin</a></li>
     </ul>
   </nav>

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Review AI Suggestions</h2>
+<p>Review the suggestions below. Check the box for each one you want to approve and apply.</p>
+
+<form method="post" action="{{ url_for('ai.apply_suggestions') }}">
+      {{ form.hidden_tag() }} {# <-- ADD THIS LINE #}
+  <table>
+    <thead>
+      <tr>
+        <th><input type="checkbox" id="select-all"></th>
+        <th>Date</th>
+        <th>Description</th>
+        <th>Current Category</th>
+        <th>Suggested Category</th>
+        <th>Reason</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for s in suggestions %}
+      {% set t = transactions.get(s.id) %}
+      {% if t %}
+      <tr>
+        <td><input type="checkbox" name="approve" value="{{ t.id }}" checked></td>
+        <td>{{ t.txn_date.strftime('%Y-%m-%d') }}</td>
+        <td>{{ t.description_raw }}</td>
+        <td><span class="muted">{{ t.category.name if t.category else 'None' }}</span></td>
+        <td><strong>{{ s.category_name }}</strong></td>
+        <td><em>{{ s.reason }}</em></td>
+      </tr>
+      {% endif %}
+    {% else %}
+      <tr><td colspan="6" class="muted">No suggestions were returned.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <button type="submit" class="contrast">Apply Approved Suggestions</button>
+  <a href="{{ url_for('ai.categorize') }}" role="button" class="secondary">Cancel</a>
+</form>
+
+<script>
+  // Simple "select all" functionality
+  document.getElementById('select-all').addEventListener('change', function(e) {
+    document.querySelectorAll('input[name="approve"]').forEach(function(checkbox) {
+      checkbox.checked = e.target.checked;
+    });
+  });
+</script>
+{% endblock %}

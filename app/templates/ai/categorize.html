@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>AI Category Suggestions</h2>
+{% if not g.ai_configured %}
+  <article>
+    <p><strong>AI Features Not Configured</strong></p>
+    <p class="muted">To enable this feature, set the `OPENAI_API_BASE`, `OPENAI_API_KEY`, and `OPENAI_MODEL_NAME` variables in your <code>.env</code> file.</p>
+  </article>
+{% else %}
+   <p>Run the AI assistant to get category suggestions for your transactions. This can take a few moments.</p>
+  <form method="post">
+    {{ form.hidden_tag() }} {# <-- ADD THIS LINE #}
+    <fieldset>
+      <legend>Select Scope</legend>
+      <label>
+        <input type="radio" name="scope" value="uncategorized" checked>
+        Only uncategorized transactions
+      </label>
+      <label>
+        <input type="radio" name="scope" value="all">
+        All transactions (to get updated suggestions)
+      </label>
+    </fieldset>
+    <button type="submit" class="contrast">Get Suggestions</button>
+  </form>
+{% endif %}
+{% endblock %}
+
+{% block before_app_init %}
+<script>
+  // A simple context processor to check config on the client side if needed
+  window.app_config = {
+    ai_configured: {{ g.ai_configured | tojson }}
+  };
+</script>
+{% endblock %}

@@ -53,45 +53,58 @@ def review_suggestions():
     txn_ids = [s['id'] for s in suggestions]
     transactions = {t.id: t for t in Transaction.query.filter(Transaction.id.in_(txn_ids)).all()}
 
-    cat_names = [s['category_name'] for s in suggestions]
-    categories = {c.name: c for c in Category.query.filter(Category.name.in_(cat_names)).all()}
+    # Fetch all categories for the manual override dropdowns
+    all_categories = Category.query.order_by(Category.group, Category.name).all()
 
     form = CSRFOnlyForm()
     return render_template(
         "ai/review.html",
         suggestions=suggestions,
         transactions=transactions,
-        categories=categories,
+        all_categories=all_categories,  # Pass all categories to the template
         form=form  # <-- AND PASS THE FORM HERE
     )
 
 @bp.route("/apply_suggestions", methods=["POST"])
 def apply_suggestions():
-    approved_ids = request.form.getlist("approve")  # Gets a list of all checked transaction IDs
+    approved_ids = set(request.form.getlist("approve"))
     suggestions = session.get('ai_suggestions', [])
+    manual_overrides = {
+        int(k.split('_')[-1]): int(v)
+        for k, v in request.form.items()
+        if k.startswith('manual_category_') and v
+    }
 
-    if not approved_ids or not suggestions:
-        flash("No suggestions to apply.", "info")
+    if not approved_ids and not manual_overrides:
+        flash("No suggestions were approved or manually set.", "info")
         return redirect(url_for('.categorize'))
 
-    # Create a mapping of transaction ID to suggested category name
-    suggestion_map = {str(s['id']): s['category_name'] for s in suggestions}
-
-    # Get all category objects from the database in one query
-    all_categories = {c.name: c for c in Category.query.all()}
+    suggestion_map = {s['id']: s['category_name'] for s in suggestions}
+    category_map = {c.id: c for c in Category.query.all()}
+    category_name_map = {c.name: c for c in category_map.values()}
 
     count = 0
-    for txn_id_str in approved_ids:
-        if txn_id_str in suggestion_map:
-            category_name = suggestion_map[txn_id_str]
-            category = all_categories.get(category_name)
-            transaction = Transaction.query.get(txn_id_str)
+    # Process all transactions that were part of the suggestion batch
+    for suggestion in suggestions:
+        txn_id = suggestion['id']
+        transaction = Transaction.query.get(txn_id)
+        if not transaction:
+            continue
 
-            if transaction and category:
-                transaction.category_id = category.id
+        # Case 1: Manual override takes highest precedence
+        if txn_id in manual_overrides:
+            cat_id = manual_overrides[txn_id]
+            if cat_id in category_map:
+                transaction.category_id = cat_id
+                count += 1
+        # Case 2: Approved AI suggestion
+        elif str(txn_id) in approved_ids:
+            suggested_cat_name = suggestion_map.get(txn_id)
+            if suggested_cat_name in category_name_map:
+                transaction.category_id = category_name_map[suggested_cat_name].id
                 count += 1
 
     db.session.commit()
-    session.pop('ai_suggestions', None)  # Clear suggestions from session
+    session.pop('ai_suggestions', None)
     flash(f"Successfully applied categories to {count} transactions.", "success")
     return redirect(url_for('dashboard.index'))

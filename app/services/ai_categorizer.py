@@ -52,6 +52,11 @@ Choose a category name from this exact list:
 Here are the transactions to categorize:
 {transaction_list_str}
 """
+        print("--- AI Request System Prompt ---")
+        print(system_prompt)
+        print("--- AI Request User Prompt ---")
+        print(user_prompt)
+        print("-----------------------------")
         # --- Make the API Call ---
         response = client.chat.completions.create(
             model=current_app.config["OPENAI_MODEL_NAME"],

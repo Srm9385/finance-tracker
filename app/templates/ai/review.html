@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Review AI Suggestions</h2>
-<p>Review the suggestions below. Check the box for each one you want to approve and apply.</p>
+<p>Review the suggestions below. Uncheck a box to reveal a dropdown for manual categorization.</p>
 
 <form method="post" action="{{ url_for('ai.apply_suggestions') }}">
-      {{ form.hidden_tag() }} {# <-- ADD THIS LINE #}
+      {{ form.hidden_tag() }}
   <table>
     <thead>
       <tr>
-        <th><input type="checkbox" id="select-all"></th>
+        <th><input type="checkbox" id="select-all" checked></th>
         <th>Date</th>
         <th>Description</th>
         <th>Current Category</th>
-        <th>Suggested Category</th>
+        <th>Suggested / Manual Category</th>
         <th>Reason</th>
       </tr>
     </thead>
@@ -20,12 +20,22 @@
     {% for s in suggestions %}
       {% set t = transactions.get(s.id) %}
       {% if t %}
-      <tr>
-        <td><input type="checkbox" name="approve" value="{{ t.id }}" checked></td>
+      <tr data-tid="{{ t.id }}">
+        <td><input type="checkbox" name="approve" value="{{ t.id }}" checked class="approve-cb"></td>
         <td>{{ t.txn_date.strftime('%Y-%m-%d') }}</td>
         <td>{{ t.description_raw }}</td>
         <td><span class="muted">{{ t.category.name if t.category else 'None' }}</span></td>
-        <td><strong>{{ s.category_name }}</strong></td>
+        <td>
+          <strong class="suggested-cat">
+            {{ s.category_name }}
+          </strong>
+          <select name="manual_category_{{ t.id }}" class="manual-cat" style="display: none;">
+            <option value="">-- Select a category --</option>
+            {% for cat in all_categories %}
+              <option value="{{ cat.id }}">{{ cat.group }} / {{ cat.name }}</option>
+            {% endfor %}
+          </select>
+        </td>
         <td><em>{{ s.reason }}</em></td>
       </tr>
       {% endif %}
@@ -40,10 +50,34 @@
 </form>
 
 <script>
-  // Simple "select all" functionality
-  document.getElementById('select-all').addEventListener('change', function(e) {
-    document.querySelectorAll('input[name="approve"]').forEach(function(checkbox) {
-      checkbox.checked = e.target.checked;
+  document.addEventListener('DOMContentLoaded', function() {
+    // Select-all functionality
+    document.getElementById('select-all').addEventListener('change', function(e) {
+      document.querySelectorAll('.approve-cb').forEach(function(checkbox) {
+        if (checkbox.checked !== e.target.checked) {
+          checkbox.checked = e.target.checked;
+          // Trigger the change event to toggle visibility
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      });
+    });
+
+    // Toggle visibility for individual checkboxes
+    document.querySelectorAll('.approve-cb').forEach(function(checkbox) {
+      checkbox.addEventListener('change', function(e) {
+        const row = e.target.closest('tr');
+        const suggestedEl = row.querySelector('.suggested-cat');
+        const manualEl = row.querySelector('.manual-cat');
+
+        if (e.target.checked) {
+          suggestedEl.style.display = 'inline';
+          manualEl.style.display = 'none';
+          manualEl.value = ''; // Reset manual selection
+        } else {
+          suggestedEl.style.display = 'none';
+          manualEl.style.display = 'inline';
+        }
+      });
     });
   });
 </script>

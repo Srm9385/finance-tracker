@@ -74,6 +74,7 @@ class Transaction(db.Model):
     deleted_at = db.Column(db.DateTime)
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), index=True, nullable=True)
     category = db.relationship("Category", lazy="joined")
+    account = db.relationship("Account", backref="transactions")
 
 class Category(db.Model):
     __tablename__ = "categories"

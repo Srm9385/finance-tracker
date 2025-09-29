@@ -67,6 +67,14 @@
         {{ csrf_form.hidden_tag() }}
         <button class="secondary" type="submit">Delete</button>
       </form>
+        <form method="post"
+            action="{{ url_for('transactions.toggle_transfer', txn_id=t.id, page=items.page, sort=sort, q=q) }}"
+            style="display: inline-block; margin-left: 0.5rem;">
+        {{ csrf_form.hidden_tag() }}
+        <button type="submit" class="secondary">
+          {{ 'Unmark Transfer' if t.is_transfer else 'Mark as Transfer' }}
+        </button>
+      </form>
     </td>
   </tr>
 {% else %}

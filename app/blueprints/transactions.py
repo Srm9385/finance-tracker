@@ -120,3 +120,18 @@ def add_manual(account_id):
 
     return render_template("transactions/add_manual.html", form=form, account=account)
 
+
+@bp.route("/toggle_transfer/<int:txn_id>", methods=["POST"])
+def toggle_transfer(txn_id):
+    """Toggles the is_transfer status of a single transaction."""
+    t = Transaction.query.get_or_404(txn_id)
+
+    # Flip the boolean value
+    t.is_transfer = not t.is_transfer
+
+    db.session.commit()
+
+    status = "marked as transfer" if t.is_transfer else "unmarked as transfer"
+    flash(f"Transaction '{t.description_raw}' was {status}.", "success")
+
+    return redirect(_back_to_account(t.account_id))

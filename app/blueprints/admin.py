@@ -1,8 +1,9 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from ..extensions import db
 from ..services.mapping import create_mapper
-from ..models import Institution, Account, Category
-from ..forms import InstitutionForm, AccountForm, MappingWizardForm, CSRFOnlyForm, CategoryForm
+from ..models import Institution, Account, Category, Transaction, Rule
+from ..forms import InstitutionForm, AccountForm, MappingWizardForm, CSRFOnlyForm, CategoryForm, RuleForm
+from sqlalchemy.exc import IntegrityError
 
 # --- END: THE FIX ---
 
@@ -145,6 +146,7 @@ def account_toggle_active(account_id):
 def categories():
     """Route for listing and creating categories."""
     form = CategoryForm()
+    csrf_form = CSRFOnlyForm()
     if form.validate_on_submit():
         new_cat = Category(group=form.group.data, name=form.name.data)
         db.session.add(new_cat)
@@ -153,8 +155,7 @@ def categories():
         return redirect(url_for(".categories"))
 
     all_categories = Category.query.order_by(Category.group, Category.name).all()
-    return render_template("admin/categories.html", form=form, categories=all_categories)
-
+    return render_template("admin/categories.html", form=form, categories=all_categories, csrf_form=csrf_form)
 
 @bp.route("/category/<int:category_id>/edit", methods=["GET", "POST"])
 def category_edit(category_id):
@@ -186,3 +187,64 @@ def category_delete(category_id):
     else:
         flash("CSRF validation failed.", "error")
     return redirect(url_for(".categories"))
+
+@bp.route("/rules", methods=["GET", "POST"])
+def rules():
+    """Route for listing and creating rules."""
+    form = RuleForm()
+    # Dynamically populate the category choices
+    form.category_id.choices = [
+        (c.id, f"{c.group} / {c.name}") for c in Category.query.order_by(Category.group, Category.name).all()
+    ]
+
+    if form.validate_on_submit():
+        new_rule = Rule(keyword=form.keyword.data, category_id=form.category_id.data)
+        db.session.add(new_rule)
+        try:
+            db.session.commit()
+            flash(f"Rule for '{new_rule.keyword}' created.", "success")
+            return redirect(url_for(".rules"))
+        except IntegrityError:
+            db.session.rollback()
+            flash(f"Error: A rule for the keyword '{form.keyword.data}' already exists.", "error")
+
+    all_rules = Rule.query.order_by(Rule.keyword).all()
+    csrf_form = CSRFOnlyForm() # For the delete buttons
+    return render_template("admin/rules.html", form=form, rules=all_rules, csrf_form=csrf_form)
+
+
+@bp.route("/rule/<int:rule_id>/edit", methods=["GET", "POST"])
+def rule_edit(rule_id):
+    """Route for editing a rule."""
+    rule = Rule.query.get_or_404(rule_id)
+    form = RuleForm(obj=rule)
+    form.category_id.choices = [
+        (c.id, f"{c.group} / {c.name}") for c in Category.query.order_by(Category.group, Category.name).all()
+    ]
+
+    if form.validate_on_submit():
+        rule.keyword = form.keyword.data
+        rule.category_id = form.category_id.data
+        try:
+            db.session.commit()
+            flash(f"Rule for '{rule.keyword}' updated.", "success")
+            return redirect(url_for(".rules"))
+        except IntegrityError:
+            db.session.rollback()
+            flash(f"Error: A rule for the keyword '{form.keyword.data}' already exists.", "error")
+
+    return render_template("admin/rule_edit.html", form=form, rule=rule)
+
+
+@bp.route("/rule/<int:rule_id>/delete", methods=["POST"])
+def rule_delete(rule_id):
+    """Route for deleting a rule."""
+    form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        rule = Rule.query.get_or_404(rule_id)
+        db.session.delete(rule)
+        db.session.commit()
+        flash(f"Rule for '{rule.keyword}' deleted.", "success")
+    else:
+        flash("CSRF validation failed.", "error")
+    return redirect(url_for(".rules"))

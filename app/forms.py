@@ -70,3 +70,10 @@ class ManualTransactionForm(FlaskForm):
     description_raw = StringField("Description", validators=[DataRequired()], default="Balance Adjustment")
     amount = DecimalField("Amount", validators=[DataRequired()], places=2)
     submit = SubmitField("Add Manual Transaction")
+
+class RuleForm(FlaskForm):
+    """Form for creating and editing categorization rules."""
+    keyword = StringField("Keyword", validators=[DataRequired()],
+                          render_kw={"placeholder": "e.g., AMAZON"})
+    category_id = SelectField("Category", coerce=int, validators=[DataRequired()])
+    submit = SubmitField("Save Rule")

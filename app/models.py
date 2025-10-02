@@ -82,3 +82,14 @@ class Category(db.Model):
     group = db.Column(db.Text, nullable=False)
     name = db.Column(db.Text, nullable=False, unique=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class Rule(db.Model):
+    __tablename__ = "rules"
+    id = db.Column(db.Integer, primary_key=True)
+    # The keyword to search for in the transaction description (e.g., "AMAZON")
+    keyword = db.Column(db.Text, nullable=False, unique=True, index=True)
+    # The category to assign if the keyword is found
+    category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    # Establish a relationship to the Category model
+    category = db.relationship("Category", lazy="joined")

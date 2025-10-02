@@ -1,9 +1,14 @@
+# srm9385/finance-tracker/finance-tracker-b6479a0b9b4b550a18703e80c76c724f6985583c/app/__init__.py
 # app/__init__.py
 from __future__ import annotations
 from flask import Flask, g
 from .extensions import init_app as init_extensions
 from .config import Config
 from .blueprints.ai import bp as ai_bp
+# --- START MODIFICATION ---
+import os
+import json
+# --- END MODIFICATION ---
 
 
 def create_app() -> Flask:
@@ -20,7 +25,7 @@ def create_app() -> Flask:
     # By defining commands here, they are attached to the app instance
     # and become available to the 'flask' command-line tool.
     from .extensions import db
-    from .models import User, Category
+    from .models import User, Category, Rule
     from werkzeug.security import generate_password_hash
     import click
 
@@ -52,44 +57,31 @@ def create_app() -> Flask:
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(ai_bp)
 
+    # --- START MODIFICATION ---
     @app.cli.command("seed-categories")
     def seed_categories_command():
-        """Seeds the database with a default set of categories."""
+        """Seeds categories from the DEFAULT_CATEGORIES_JSON env var."""
+        categories_json = os.getenv("DEFAULT_CATEGORIES_JSON")
 
-        default_categories = [
-            {"group": "Housing & Utilities", "name": "Rent/Mortgage"},
-            {"group": "Housing & Utilities", "name": "Utilities"},
-            {"group": "Housing & Utilities", "name": "Internet/Phone"},
-            {"group": "Housing & Utilities", "name": "Home Maintenance"},
-            {"group": "Transportation", "name": "Fuel"},
-            {"group": "Transportation", "name": "Public Transit/Rideshare"},
-            {"group": "Transportation", "name": "Auto Maintenance/Repairs"},
-            {"group": "Transportation", "name": "Insurance (Auto)"},
-            {"group": "Food & Dining", "name": "Groceries"},
-            {"group": "Food & Dining", "name": "Dining Out"},
-            {"group": "Food & Dining", "name": "Coffee/Snacks"},
-            {"group": "Personal & Lifestyle", "name": "Clothing"},
-            {"group": "Personal & Lifestyle", "name": "Health & Fitness"},
-            {"group": "Personal & Lifestyle", "name": "Subscriptions/Streaming"},
-            {"group": "Personal & Lifestyle", "name": "Entertainment"},
-            {"group": "Financial & Obligations", "name": "Loan Payments"},
-            {"group": "Financial & Obligations", "name": "Credit Card Payments"},
-            {"group": "Financial & Obligations", "name": "Insurance (Non-Auto)"},
-            {"group": "Financial & Obligations", "name": "Bank Fees/Interest"},
-            {"group": "Giving & Special", "name": "Gifts"},
-            {"group": "Giving & Special", "name": "Donations"},
-            {"group": "Work & Education", "name": "Professional Expenses"},
-            {"group": "Work & Education", "name": "Education"},
-            {"group": "Income", "name": "Salary/Wages"},
-            {"group": "Income", "name": "Bonus/Commission"},
-            {"group": "Income", "name": "Other Income"},
-            {"group": "Savings & Investments", "name": "Emergency Fund"},
-            {"group": "Savings & Investments", "name": "Retirement Contributions"},
-            {"group": "Savings & Investments", "name": "Other Savings/Investments"},
-        ]
+        if not categories_json:
+            click.echo("Warning: DEFAULT_CATEGORIES_JSON environment variable not set. No categories seeded.")
+            return
+
+        try:
+            default_categories = json.loads(categories_json)
+            if not isinstance(default_categories, list):
+                raise ValueError("JSON must be an array of category objects.")
+        except (json.JSONDecodeError, ValueError) as e:
+            click.echo(f"Error: Could not parse DEFAULT_CATEGORIES_JSON. Please ensure it is a valid JSON array. Details: {e}")
+            return
 
         count = 0
         for cat_data in default_categories:
+            # Basic validation for each category object
+            if not isinstance(cat_data, dict) or "group" not in cat_data or "name" not in cat_data:
+                click.echo(f"Warning: Skipping invalid category entry: {cat_data}")
+                continue
+
             # Check if a category with this name already exists
             exists = Category.query.filter_by(name=cat_data["name"]).first()
             if not exists:
@@ -101,7 +93,53 @@ def create_app() -> Flask:
             db.session.commit()
             click.echo(f"Successfully seeded {count} new categories.")
         else:
-            click.echo("All default categories already exist. Nothing to seed.")
+            click.echo("All categories from the environment variable already exist. Nothing to seed.")
+
+    @app.cli.command("seed-rules")
+    def seed_rules_command():
+        """Seeds categorization rules from the DEFAULT_RULES_JSON env var."""
+        rules_json = os.getenv("DEFAULT_RULES_JSON")
+
+        if not rules_json:
+            click.echo("Warning: DEFAULT_RULES_JSON not set. No rules seeded.")
+            return
+
+        try:
+            default_rules = json.loads(rules_json)
+            if not isinstance(default_rules, dict):
+                raise ValueError("JSON must be an object.")
+        except (json.JSONDecodeError, ValueError) as e:
+            click.echo(f"Error: Could not parse DEFAULT_RULES_JSON. Details: {e}")
+            return
+
+        # Fetch all existing categories and rules for efficiency
+        all_categories = {c.name: c for c in Category.query.all()}
+        existing_rules = {r.keyword for r in Rule.query.all()}
+
+        count = 0
+        for category_name, keywords in default_rules.items():
+            if category_name not in all_categories:
+                click.echo(f"Warning: Category '{category_name}' not found. Skipping rules: {keywords}")
+                continue
+
+            category = all_categories[category_name]
+
+            if not isinstance(keywords, list):
+                click.echo(f"Warning: Keywords for '{category_name}' is not a list. Skipping.")
+                continue
+
+            for keyword in keywords:
+                if keyword not in existing_rules:
+                    new_rule = Rule(keyword=keyword, category_id=category.id)
+                    db.session.add(new_rule)
+                    existing_rules.add(keyword)  # Add to our set to prevent re-adding
+                    count += 1
+
+        if count > 0:
+            db.session.commit()
+            click.echo(f"Successfully seeded {count} new rules.")
+        else:
+            click.echo("All rules from the environment variable already exist.")
 
     # Root redirect
     @app.route("/")

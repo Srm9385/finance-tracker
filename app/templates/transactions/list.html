@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+
 {% block content %}
 <h2>{{ account.institution.name }} — {{ account.name }}</h2>
 
@@ -8,91 +9,74 @@
 
 <form method="get" class="grid">
   <input type="text" name="q" value="{{ q }}" placeholder="Search description…">
-  <select name="sort">
-    <option value="date_desc" {{ 'selected' if sort=='date_desc' else '' }}>Newest first</option>
-    <option value="date_asc"  {{ 'selected' if sort=='date_asc' else '' }}>Oldest first</option>
-    <option value="amount_desc" {{ 'selected' if sort=='amount_desc' else '' }}>Amount ↓</option>
-    <option value="amount_asc"  {{ 'selected' if sort=='amount_asc' else '' }}>Amount ↑</option>
-  </select>
-  <select name="per_page">
-    {% for n in [25,50,100,200] %}
-      <option value="{{ n }}" {{ 'selected' if per_page==n else '' }}>{{ n }} / page</option>
-    {% endfor %}
-  </select>
-  <button class="secondary" type="submit">Apply</button>
+  <button class="secondary" type="submit">Search</button>
 </form>
 
-<table>
-<thead>
-  <tr>
-    <th>Date</th>
-    <th>Description</th>
-    <th class="mono">Amount</th>
-    <th>Category</th> {# NEW COLUMN HEADER #}
-    <th>Import</th>
-    <th>Actions</th>
-  </tr>
-</thead>
-<tbody>
-{% for t in items.items %}
-  <tr>
-    <td>{{ t.txn_date }}</td>
-    <td>{{ t.description_raw }}</td>
-    <td class="mono">{{ "%.2f"|format(t.amount_cents/100) }}</td>
-    {# NEW COLUMN FOR CATEGORY DROPDOWN #}
-    <td>
-      <form method="post" action="{{ url_for('transactions.set_category', txn_id=t.id, page=items.page, sort=sort, q=q) }}">
-        {{ csrf_form.hidden_tag() }}
-        <select name="category_id" onchange="this.form.submit()">
-          <option value="None">-- None --</option>
-          {% for cat in categories %}
-            <option value="{{ cat.id }}" {{ 'selected' if t.category_id == cat.id else '' }}>
-              {{ cat.group }} / {{ cat.name }}
-            </option>
-          {% endfor %}
-        </select>
-      </form>
-    </td>
-      <td>
-      {% if t.import_id %}
-        <a href="{{ url_for('imports.log', import_id=t.import_id) }}">#{{ t.import_id }}</a>
-      {% else %}
-        <span class="muted">Manual</span>
-      {% endif %}
-    </td>
-    <td>
-      <form method="post"
-        action="{{ url_for('transactions.delete_single', txn_id=t.id, page=items.page, sort=sort, q=q) }}"
-        onsubmit="return confirm('Delete this transaction?');">
-        {{ csrf_form.hidden_tag() }}
-        <button class="secondary" type="submit">Delete</button>
-      </form>
-        <form method="post"
-            action="{{ url_for('transactions.toggle_transfer', txn_id=t.id, page=items.page, sort=sort, q=q) }}"
-            style="display: inline-block; margin-left: 0.5rem;">
-        {{ csrf_form.hidden_tag() }}
-        <button type="submit" class="secondary">
-          {{ 'Unmark Transfer' if t.is_transfer else 'Mark as Transfer' }}
-        </button>
-      </form>
-    </td>
-  </tr>
-{% else %}
-  <tr><td colspan="6" class="muted">No transactions match.</td></tr> {# UPDATE COLSPAN #}
-{% endfor %}
-</tbody>
+<link href="{{ url_for('static', filename='vendor/tabulator/css/tabulator.min.css') }}" rel="stylesheet">
+<div id="transaction-table" style="margin-top: 1rem;"></div>
+{% endblock %}
 
-</table>
+{% block scripts %}
+<script>
+  // (The JavaScript code to initialize Tabulator remains exactly the same)
+  document.addEventListener('DOMContentLoaded', function() {
+    const tableData = {{ table_data | tojson }};
+    const categories = {{ categories | tojson }};
 
-<nav>
-  <ul>
-    {% if items.has_prev %}
-      <li><a href="{{ url_for('transactions.list_for_account', account_id=account.id, page=items.prev_num, sort=sort, q=q, per_page=per_page) }}">Previous</a></li>
-    {% endif %}
-    <li>Page {{ items.page }} / {{ items.pages or 1 }}</li>
-    {% if items.has_next %}
-      <li><a href="{{ url_for('transactions.list_for_account', account_id=account.id, page=items.next_num, sort=sort, q=q, per_page=per_page) }}">Next</a></li>
-    {% endif %}
-  </ul>
-</nav>
+    const categoryLookup = {};
+    categories.forEach(cat => {
+      categoryLookup[cat.id] = `${cat.group} / ${cat.name}`;
+    });
+
+    const categoryFormatter = function(cell, formatterParams, onRendered) {
+      const categoryId = cell.getValue();
+      return categoryId ? categoryLookup[categoryId] : "-- None --";
+    };
+
+    const moneyFormatter = function(cell, formatterParams, onRendered) {
+        return (cell.getValue() / 100.0).toFixed(2);
+    };
+
+    const actionsFormatter = function(cell, formatterParams, onRendered) {
+        const t = cell.getRow().getData();
+        const deleteUrl = `{{ url_for('transactions.delete_single', txn_id=0) }}`.replace('0', t.id);
+        const transferUrl = `{{ url_for('transactions.toggle_transfer', txn_id=0) }}`.replace('0', t.id);
+        const transferText = t.is_transfer ? 'Unmark Transfer' : 'Mark as Transfer';
+        const csrfToken = "{{ csrf_token() }}";
+
+        return `
+            <form method="post" action="${deleteUrl}" onsubmit="return confirm('Delete this transaction?');" style="display: inline-block;">
+                <input type="hidden" name="csrf_token" value="${csrfToken}">
+                <button type="submit" class="secondary outline" style="padding: 5px 10px; font-size: 0.8em;">Delete</button>
+            </form>
+            <form method="post" action="${transferUrl}" style="display: inline-block;">
+                <input type="hidden" name="csrf_token" value="${csrfToken}">
+                <button type="submit" class="secondary outline" style="padding: 5px 10px; font-size: 0.8em;">${transferText}</button>
+            </form>
+        `;
+    };
+
+    const table = new Tabulator("#transaction-table", {
+      data: tableData,
+      layout: "fitColumns",
+      tabulatorClass: "tabulator-pico",
+      columns: [
+        {title: "Date", field: "txn_date", sorter: "date", width: 120, headerSort: true, sorterParams:{format:"yyyy-MM-dd"}},
+        {title: "Description", field: "description_raw", headerSort: true, widthGrow: 2},
+        {title: "Amount", field: "amount_cents", sorter: "number", hozAlign: "right", formatter: moneyFormatter, headerSort: true, width: 120},
+        {title: "Category", field: "category_id", formatter: categoryFormatter, headerSort: true, widthGrow: 1.5},
+        {title: "Import", field: "import_id", hozAlign: "center", headerSort: true, width: 100, formatter: function(cell) {
+            const importId = cell.getValue();
+            if (importId) {
+                const url = `{{ url_for('imports.log', import_id=0) }}`.replace('0', importId);
+                return `<a href="${url}">#${importId}</a>`;
+            }
+            return `<span class="muted">Manual</span>`;
+        }},
+        {title: "Actions", formatter: actionsFormatter, hozAlign: "center", headerSort: false, resizable: false, width: 250},
+      ],
+      resizableColumnFit: true,
+    });
+  });
+</script>
 {% endblock %}

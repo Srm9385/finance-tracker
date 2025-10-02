@@ -115,5 +115,10 @@
     <h3>Categorization Rules</h3>
     <p><a href="{{ url_for('admin.rules') }}" role="button" class="secondary">Manage Rules</a></p>
 </section>
-{% endblock %}
 
+<hr/>
+<section id="backup">
+    <h3>Backup & Restore</h3>
+    <p><a href="{{ url_for('backup.index') }}" role="button" class="secondary">Go to Backup/Restore</a></p>
+</section>
+{% endblock %}

@@ -4,7 +4,7 @@
   <meta charset="utf-8"/>
   <title>Finance Tracker</title>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/pico/pico.min.css') }}">
   <style>
     .muted { color: #6c757d; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
@@ -39,5 +39,10 @@
 
     {% block content %}{% endblock %}
   </main>
+
+  <script type="text/javascript" src="{{ url_for('static', filename='vendor/luxon/luxon.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='vendor/tabulator/js/tabulator.min.js') }}"></script>
+
+  {% block scripts %}{% endblock %}
 </body>
 </html>

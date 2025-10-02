@@ -5,6 +5,7 @@ from flask import Flask, g
 from .extensions import init_app as init_extensions
 from .config import Config
 from .blueprints.ai import bp as ai_bp
+from .blueprints.backup import bp as backup_bp
 # --- START MODIFICATION ---
 import os
 import json
@@ -56,6 +57,7 @@ def create_app() -> Flask:
     app.register_blueprint(transactions_bp)
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(ai_bp)
+    app.register_blueprint(backup_bp, url_prefix="/admin/backup")
 
     # --- START MODIFICATION ---
     @app.cli.command("seed-categories")

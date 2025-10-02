@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Backup & Restore</h2>
+<p>Create a compressed archive (<code>.tar.gz</code>) containing the database and <code>.env</code> file, or restore from a previously created archive.</p>
+<div class="grid">
+  <article>
+    <header><strong>Create Backup</strong></header>
+    <p>Click the button below to generate a new <code>.tar.gz</code> archive. This will contain a full database backup and a copy of your <code>.env</code> configuration file.</p>
+    <a href="{{ url_for('backup.create_backup') }}" role="button" class="contrast">Create and Download Backup</a>
+  </article>
+
+  <article>
+    <header><strong>Restore from Backup</strong></header>
+    <p style="color: red;"><strong>Warning:</strong> Restoring will overwrite the current database. This action does not automatically restore the <code>.env</code> file; you must do that manually.</p>
+    <form method="post" enctype="multipart/form-data">
+      {{ form.hidden_tag() }}
+      <label>
+        {{ form.backup_file.label }}
+        {{ form.backup_file() }}
+        {% for e in form.backup_file.errors %}<small class="muted">{{ e }}</small>{% endfor %}
+      </label>
+      {{ form.submit(class="secondary") }}
+    </form>
+  </article>
+</div>
+{% endblock %}

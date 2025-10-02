@@ -77,3 +77,9 @@ class RuleForm(FlaskForm):
                           render_kw={"placeholder": "e.g., AMAZON"})
     category_id = SelectField("Category", coerce=int, validators=[DataRequired()])
     submit = SubmitField("Save Rule")
+
+class RestoreForm(FlaskForm):
+    """Form for uploading a database backup file."""
+    # --- START MODIFICATION ---
+    backup_file = FileField("Backup Archive (.tar.gz)", validators=[DataRequired()])    # --- END MODIFICATION ---
+    submit = SubmitField("Restore from Backup")

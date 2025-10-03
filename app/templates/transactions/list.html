@@ -1,5 +1,4 @@
 {% extends 'base.html' %}
-
 {% block content %}
 <h2>{{ account.institution.name }} — {{ account.name }}</h2>
 
@@ -18,14 +17,24 @@
 
 {% block scripts %}
 <script>
-  // (The JavaScript code to initialize Tabulator remains exactly the same)
   document.addEventListener('DOMContentLoaded', function() {
     const tableData = {{ table_data | tojson }};
     const categories = {{ categories | tojson }};
 
     const categoryLookup = {};
     categories.forEach(cat => {
-      categoryLookup[cat.id] = `${cat.group} / ${cat.name}`;
+      // --- START MODIFICATION ---
+      categoryLookup[cat.id] = `${cat.name} / ${cat.group}`;
+      // --- END MODIFICATION ---
+    });
+
+    const categoryEditorParams = {
+        values: {"": "-- None --"}
+    };
+    categories.forEach(cat => {
+        // --- START MODIFICATION ---
+        categoryEditorParams.values[cat.id] = `${cat.name} / ${cat.group}`;
+        // --- END MODIFICATION ---
     });
 
     const categoryFormatter = function(cell, formatterParams, onRendered) {
@@ -64,7 +73,7 @@
         {title: "Date", field: "txn_date", sorter: "date", width: 120, headerSort: true, sorterParams:{format:"yyyy-MM-dd"}},
         {title: "Description", field: "description_raw", headerSort: true, widthGrow: 2},
         {title: "Amount", field: "amount_cents", sorter: "number", hozAlign: "right", formatter: moneyFormatter, headerSort: true, width: 120},
-        {title: "Category", field: "category_id", formatter: categoryFormatter, headerSort: true, widthGrow: 1.5},
+        {title: "Category", field: "category_id", formatter: categoryFormatter, headerSort: true, widthGrow: 1.5, editor: "select", editorParams: categoryEditorParams},
         {title: "Import", field: "import_id", hozAlign: "center", headerSort: true, width: 100, formatter: function(cell) {
             const importId = cell.getValue();
             if (importId) {
@@ -76,6 +85,31 @@
         {title: "Actions", formatter: actionsFormatter, hozAlign: "center", headerSort: false, resizable: false, width: 250},
       ],
       resizableColumnFit: true,
+    });
+
+    table.on("cellEdited", function(cell){
+        const rowData = cell.getRow().getData();
+        const field = cell.getField();
+
+        if (field === "category_id") {
+            const url = `{{ url_for('transactions.set_category', txn_id=0) }}`.replace('0', rowData.id);
+            const csrfToken = "{{ csrf_token() }}";
+            const newCategoryId = cell.getValue();
+
+            const formData = new FormData();
+            formData.append('csrf_token', csrfToken);
+            formData.append('category_id', newCategoryId);
+
+            fetch(url, {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                if (!response.ok) {
+                    cell.restoreOldValue();
+                    alert("Error: Could not update category.");
+                }
+            });
+        }
     });
   });
 </script>

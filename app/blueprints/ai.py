@@ -78,7 +78,11 @@ def review_suggestions():
 
     txn_ids = [s['id'] for s in suggestions]
     transactions = {t.id: t for t in Transaction.query.filter(Transaction.id.in_(txn_ids)).all()}
-    all_categories = Category.query.order_by(Category.group, Category.name).all()
+
+    # --- START MODIFICATION ---
+    # Sort by name first for consistency
+    all_categories = Category.query.order_by(Category.name, Category.group).all()
+    # --- END MODIFICATION ---
 
     form = CSRFOnlyForm()
     return render_template(
@@ -88,7 +92,6 @@ def review_suggestions():
         all_categories=all_categories,
         form=form
     )
-
 
 @bp.route("/apply_suggestions", methods=["POST"])
 def apply_suggestions():

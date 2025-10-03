@@ -192,9 +192,9 @@ def category_delete(category_id):
 def rules():
     """Route for listing and creating rules."""
     form = RuleForm()
-    # Dynamically populate the category choices
+    # Sort by name and update display format
     form.category_id.choices = [
-        (c.id, f"{c.group} / {c.name}") for c in Category.query.order_by(Category.group, Category.name).all()
+        (c.id, f"{c.name} / {c.group}") for c in Category.query.order_by(Category.name, Category.group).all()
     ]
 
     if form.validate_on_submit():
@@ -218,10 +218,10 @@ def rule_edit(rule_id):
     """Route for editing a rule."""
     rule = Rule.query.get_or_404(rule_id)
     form = RuleForm(obj=rule)
+    # Sort by name and update display format
     form.category_id.choices = [
-        (c.id, f"{c.group} / {c.name}") for c in Category.query.order_by(Category.group, Category.name).all()
+        (c.id, f"{c.name} / {c.group}") for c in Category.query.order_by(Category.name, Category.group).all()
     ]
-
     if form.validate_on_submit():
         rule.keyword = form.keyword.data
         rule.category_id = form.category_id.data

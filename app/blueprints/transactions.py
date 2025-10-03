@@ -37,7 +37,10 @@ def list_for_account(account_id):
             "is_transfer": t.is_transfer,
         })
 
-    all_categories = Category.query.order_by(Category.group, Category.name).all()
+    # --- START MODIFICATION ---
+    # Sort by name first, then group for a more intuitive dropdown
+    all_categories = Category.query.order_by(Category.name, Category.group).all()
+    # --- END MODIFICATION ---
 
     categories_list = [
         {"id": c.id, "group": c.group, "name": c.name} for c in all_categories
@@ -53,8 +56,6 @@ def list_for_account(account_id):
         categories=categories_list,
         csrf_form=csrf_form
     )
-
-
 @bp.route("/delete/<int:txn_id>", methods=["POST"])
 def delete_single(txn_id):
     t = Transaction.query.get_or_404(txn_id)

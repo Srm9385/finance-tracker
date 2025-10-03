@@ -33,8 +33,8 @@
           <select name="manual_category_{{ t.id }}" class="manual-cat" style="display: none;">
             <option value="">-- Select a category --</option>
             {% for cat in all_categories %}
-              <option value="{{ cat.id }}">{{ cat.group }} / {{ cat.name }}</option>
-            {% endfor %}
+              <option value="{{ cat.id }}">{{ cat.name }} / {{ cat.group }}</option>
+              {% endfor %}
           </select>
         </td>
         <td><em>{{ s.reason }}</em></td>

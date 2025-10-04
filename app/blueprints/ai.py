@@ -1,7 +1,8 @@
 # srm9385/finance-tracker/finance-tracker-b6479a0b9b4b550a18703e80c76c724f6985583c/app/blueprints/ai.py
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from ..extensions import db
-from ..models import Transaction, Category, Rule, Institution, Account, TransferKeyword  # <-- Import Rule
+from ..models import Transaction, Category, Rule, Institution, Account, TransferKeyword, \
+    RefundKeyword  # <-- Import Rule
 from ..services.ai_categorizer import get_category_suggestions, is_ai_configured
 from ..forms import CSRFOnlyForm, AICategorizeForm
 
@@ -110,14 +111,16 @@ def review_suggestions():
     # Sort by name first for consistency
     all_categories = Category.query.order_by(Category.name, Category.group).all()
     transfer_keywords = [kw.keyword for kw in TransferKeyword.query.all()]
-    print(f"DEBUG: Keywords being sent to template: {transfer_keywords}")
+    refund_keywords = [kw.keyword for kw in RefundKeyword.query.all()]
+
     form = CSRFOnlyForm()
     return render_template(
         "ai/review.html",
         suggestions=suggestions,
         transactions=transactions,
         all_categories=all_categories,
-        transfer_keywords=transfer_keywords, # Pass keywords to template
+        transfer_keywords=transfer_keywords,
+        refund_keywords=refund_keywords,
         form=form
     )
 
@@ -137,9 +140,10 @@ def apply_suggestions():
         if k.startswith('manual_category_') and v
     }
     transfer_ids = set(request.form.getlist("mark_as_transfer"))
+    refund_ids = set(request.form.getlist("mark_as_refund"))
 
-    if not approved_ids and not manual_overrides and not transfer_ids:
-        flash("No suggestions were approved, manually set, or marked as transfers.", "info")
+    if not approved_ids and not manual_overrides and not transfer_ids and not refund_ids:
+        flash("No suggestions were approved, manually set, marked as transfers, or marked as refunds.", "info")
         return redirect(url_for('.categorize'))
 
     suggestion_map = {s['id']: s['category_name'] for s in suggestions}
@@ -148,6 +152,7 @@ def apply_suggestions():
 
     count = 0
     transfer_count = 0
+    refund_count = 0
     all_txn_ids = [s['id'] for s in suggestions]
     transactions_to_update = Transaction.query.filter(Transaction.id.in_(all_txn_ids)).all()
 
@@ -158,6 +163,11 @@ def apply_suggestions():
             if not transaction.is_transfer:
                 transaction.is_transfer = True
                 transfer_count += 1
+
+        if str(txn_id) in refund_ids:
+            if not transaction.is_refund:
+                transaction.is_refund = True
+                refund_count += 1
 
         if txn_id in manual_overrides:
             cat_id = manual_overrides[txn_id]
@@ -174,10 +184,10 @@ def apply_suggestions():
     session.pop('ai_suggestions', None)
 
     flash_messages = []
-    if count > 0:
-        flash_messages.append(f"Successfully applied categories to {count} transactions.")
     if transfer_count > 0:
         flash_messages.append(f"Marked {transfer_count} transactions as transfers.")
+    if refund_count > 0:
+        flash_messages.append(f"Marked {refund_count} transactions as refunds.")
 
     if flash_messages:
         flash(" ".join(flash_messages), "success")

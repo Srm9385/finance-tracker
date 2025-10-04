@@ -71,6 +71,7 @@ class Transaction(db.Model):
     explain_json = db.Column(JSONB)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_deleted = db.Column(db.Boolean, default=False, nullable=False)
+    is_refund = db.Column(db.Boolean, default=False)
     deleted_at = db.Column(db.DateTime)
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), index=True, nullable=True)
     category = db.relationship("Category", lazy="joined")
@@ -96,6 +97,12 @@ class Rule(db.Model):
 
 class TransferKeyword(db.Model):
     __tablename__ = "transfer_keywords"
+    id = db.Column(db.Integer, primary_key=True)
+    keyword = db.Column(db.Text, nullable=False, unique=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class RefundKeyword(db.Model):
+    __tablename__ = "refund_keywords"
     id = db.Column(db.Integer, primary_key=True)
     keyword = db.Column(db.Text, nullable=False, unique=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

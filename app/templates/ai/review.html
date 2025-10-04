@@ -38,7 +38,7 @@
           </select>
         </td>
         <td><em>{{ s.reason }}</em></td>
-        <td>
+       <td>
           <label>
             {% set checked = namespace(value=false) %}
             {% for keyword in transfer_keywords %}
@@ -49,6 +49,17 @@
             {% endfor %}
             <input type="checkbox" name="mark_as_transfer" value="{{ t.id }}" {% if checked.value %}checked{% endif %}>
             Mark as Transfer
+          </label>
+          <label>
+            {% set checked = namespace(value=false) %}
+            {% for keyword in refund_keywords %}
+              {# Ensure both sides of the comparison are lowercase #}
+              {% if keyword.lower() in t.description_raw.lower() %}
+                {% set checked.value = true %}
+              {% endif %}
+            {% endfor %}
+            <input type="checkbox" name="mark_as_refund" value="{{ t.id }}" {% if checked.value %}checked{% endif %}>
+            Mark as Refund
           </label>
         </td>
       </tr>

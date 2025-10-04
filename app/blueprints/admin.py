@@ -2,9 +2,9 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from sqlalchemy.exc import IntegrityError
 from ..extensions import db
 from ..services.mapping import create_mapper, latest_mapper_for
-from ..models import Institution, Account, Category, Transaction, Rule, TransferKeyword
+from ..models import Institution, Account, Category, Transaction, Rule, TransferKeyword, RefundKeyword
 from ..forms import (InstitutionForm, AccountForm, MappingWizardForm,
-                     CSRFOnlyForm, CategoryForm, RuleForm, TransferKeywordForm)
+                     CSRFOnlyForm, CategoryForm, RuleForm, TransferKeywordForm, RefundKeywordForm)
 import json
 
 bp = Blueprint("admin", __name__)
@@ -313,3 +313,41 @@ def transfer_keyword_delete(keyword_id):
     else:
         flash("CSRF validation failed.", "error")
     return redirect(url_for(".transfer_keywords"))
+
+@bp.route("/refund-keywords", methods=["GET", "POST"])
+def refund_keywords():
+    """Route for listing and creating refund keywords."""
+    form = RefundKeywordForm()
+    csrf_form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        new_keyword = RefundKeyword(keyword=form.keyword.data)
+        db.session.add(new_keyword)
+        try:
+            db.session.commit()
+            flash(f"Refund keyword '{new_keyword.keyword}' created.", "success")
+            return redirect(url_for(".refund_keywords"))
+        except IntegrityError:
+            db.session.rollback()
+            flash(f"Error: The keyword '{form.keyword.data}' already exists.", "error")
+
+    all_keywords = RefundKeyword.query.order_by(RefundKeyword.keyword).all()
+    return render_template(
+        "admin/refund_keywords.html",
+        form=form,
+        keywords=all_keywords,
+        csrf_form=csrf_form
+    )
+
+
+@bp.route("/refund-keyword/<int:keyword_id>/delete", methods=["POST"])
+def refund_keyword_delete(keyword_id):
+    """Route for deleting a refund keyword."""
+    form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        keyword = RefundKeyword.query.get_or_404(keyword_id)
+        db.session.delete(keyword)
+        db.session.commit()
+        flash(f"Refund keyword '{keyword.keyword}' deleted.", "success")
+    else:
+        flash("CSRF validation failed.", "error")
+    return redirect(url_for(".refund_keywords"))

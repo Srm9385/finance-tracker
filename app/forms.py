@@ -90,6 +90,12 @@ class TransferKeywordForm(FlaskForm):
                           render_kw={"placeholder": "e.g., VENMO"})
     submit = SubmitField("Add Keyword")
 
+class RefundKeywordForm(FlaskForm):
+    """Form for adding a new refund keyword."""
+    keyword = StringField("Keyword", validators=[DataRequired()],
+                          render_kw={"placeholder": "e.g., REFUND"})
+    submit = SubmitField("Add Keyword")
+
 class RestoreForm(FlaskForm):
     """Form for uploading a database backup file."""
     # --- START MODIFICATION ---

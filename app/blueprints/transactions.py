@@ -124,3 +124,14 @@ def toggle_transfer(txn_id):
     flash(f"Transaction '{t.description_raw}' was {status}.", "success")
 
     return redirect(_back_to_account(t.account_id))
+
+@bp.route("/toggle_refund/<int:txn_id>", methods=["POST"])
+def toggle_refund(txn_id):
+    t = Transaction.query.get_or_404(txn_id)
+    t.is_refund = not t.is_refund
+    db.session.commit()
+
+    status = "marked as refund" if t.is_refund else "unmarked as refund"
+    flash(f"Transaction '{t.description_raw}' was {status}.", "success")
+
+    return redirect(_back_to_account(t.account_id))

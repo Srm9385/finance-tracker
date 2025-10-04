@@ -46,11 +46,13 @@
         return (cell.getValue() / 100.0).toFixed(2);
     };
 
-    const actionsFormatter = function(cell, formatterParams, onRendered) {
+ const actionsFormatter = function(cell, formatterParams, onRendered) {
         const t = cell.getRow().getData();
         const deleteUrl = `{{ url_for('transactions.delete_single', txn_id=0) }}`.replace('0', t.id);
         const transferUrl = `{{ url_for('transactions.toggle_transfer', txn_id=0) }}`.replace('0', t.id);
+        const refundUrl = `{{ url_for('transactions.toggle_refund', txn_id=0) }}`.replace('0', t.id);
         const transferText = t.is_transfer ? 'Unmark Transfer' : 'Mark as Transfer';
+        const refundText = t.is_refund ? 'Unmark Refund' : 'Mark as Refund';
         const csrfToken = "{{ csrf_token() }}";
 
         return `
@@ -61,6 +63,10 @@
             <form method="post" action="${transferUrl}" style="display: inline-block;">
                 <input type="hidden" name="csrf_token" value="${csrfToken}">
                 <button type="submit" class="secondary outline" style="padding: 5px 10px; font-size: 0.8em;">${transferText}</button>
+            </form>
+            <form method="post" action="${refundUrl}" style="display: inline-block;">
+                <input type="hidden" name="csrf_token" value="${csrfToken}">
+                <button type="submit" class="secondary outline" style="padding: 5px 10px; font-size: 0.8em;">${refundText}</button>
             </form>
         `;
     };

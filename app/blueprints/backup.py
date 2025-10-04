@@ -105,6 +105,7 @@ def create_backup():
 
             pgdump_cmd = ["pg_dump", "-h", conn_args["host"], "-p", conn_args["port"],
                           "-U", conn_args["user"], "-d", conn_args["dbname"],
+                          "--exclude-table=alembic_version",
                           "--clean", "--if-exists", "-f", sql_filepath]
 
             env = os.environ.copy()

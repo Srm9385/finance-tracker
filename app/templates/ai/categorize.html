@@ -1,3 +1,4 @@
+{# app/templates/ai/categorize.html #}
 {% extends 'base.html' %}
 {% block content %}
 <h2>AI Category Suggestions</h2>
@@ -9,7 +10,14 @@
 {% else %}
    <p>Run the AI assistant to get category suggestions for your transactions. This can take a few moments.</p>
   <form method="post">
-    {{ form.hidden_tag() }} {# <-- ADD THIS LINE #}
+    {{ form.hidden_tag() }}
+
+    <div class="grid">
+        <label>{{ form.institution_id.label }} {{ form.institution_id() }}</label>
+        <label>{{ form.account_id.label }} {{ form.account_id() }}</label>
+    </div>
+
+
     <fieldset>
       <legend>Select Scope</legend>
       <label>
@@ -26,11 +34,50 @@
 {% endif %}
 {% endblock %}
 
-{% block before_app_init %}
+{% block scripts %}
 <script>
-  // A simple context processor to check config on the client side if needed
-  window.app_config = {
-    ai_configured: {{ g.ai_configured | tojson }}
-  };
+  document.addEventListener('DOMContentLoaded', function () {
+    const institutionSelect = document.getElementById('institution_id');
+    const accountSelect = document.getElementById('account_id');
+
+    institutionSelect.addEventListener('change', async function() {
+        const institutionId = this.value;
+
+        // Clear current account options
+        accountSelect.innerHTML = '<option value="">All Accounts</option>';
+
+        if (!institutionId) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/ai/accounts-for-institution/${institutionId}`);
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            const accounts = await response.json();
+
+            accounts.forEach(account => {
+                const option = new Option(account.name, account.id);
+                accountSelect.add(option);
+            });
+        } catch (error) {
+            console.error('Error fetching accounts:', error);
+        }
+    });
+
+    // If there is a pre-selected institution on page load, trigger the change event to load accounts
+    if (institutionSelect.value) {
+        institutionSelect.dispatchEvent(new Event('change'));
+        // Restore the selected account if it exists in the form data
+        const selectedAccountId = "{{ form.account_id.data or '' }}";
+        if (selectedAccountId) {
+            // A short delay to allow the options to be populated by the fetch request
+            setTimeout(() => {
+                accountSelect.value = selectedAccountId;
+            }, 100);
+        }
+    }
+  });
 </script>
 {% endblock %}

@@ -2,9 +2,9 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from sqlalchemy.exc import IntegrityError
 from ..extensions import db
 from ..services.mapping import create_mapper, latest_mapper_for
-from ..models import Institution, Account, Category, Transaction, Rule
+from ..models import Institution, Account, Category, Transaction, Rule, TransferKeyword
 from ..forms import (InstitutionForm, AccountForm, MappingWizardForm,
-                     CSRFOnlyForm, CategoryForm, RuleForm)
+                     CSRFOnlyForm, CategoryForm, RuleForm, TransferKeywordForm)
 import json
 
 bp = Blueprint("admin", __name__)
@@ -275,3 +275,41 @@ def rule_delete(rule_id):
     else:
         flash("CSRF validation failed.", "error")
     return redirect(url_for(".rules"))
+
+@bp.route("/transfer-keywords", methods=["GET", "POST"])
+def transfer_keywords():
+    """Route for listing and creating transfer keywords."""
+    form = TransferKeywordForm()
+    csrf_form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        new_keyword = TransferKeyword(keyword=form.keyword.data)
+        db.session.add(new_keyword)
+        try:
+            db.session.commit()
+            flash(f"Transfer keyword '{new_keyword.keyword}' created.", "success")
+            return redirect(url_for(".transfer_keywords"))
+        except IntegrityError:
+            db.session.rollback()
+            flash(f"Error: The keyword '{form.keyword.data}' already exists.", "error")
+
+    all_keywords = TransferKeyword.query.order_by(TransferKeyword.keyword).all()
+    return render_template(
+        "admin/transfer_keywords.html",
+        form=form,
+        keywords=all_keywords,
+        csrf_form=csrf_form
+    )
+
+
+@bp.route("/transfer-keyword/<int:keyword_id>/delete", methods=["POST"])
+def transfer_keyword_delete(keyword_id):
+    """Route for deleting a transfer keyword."""
+    form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        keyword = TransferKeyword.query.get_or_404(keyword_id)
+        db.session.delete(keyword)
+        db.session.commit()
+        flash(f"Transfer keyword '{keyword.keyword}' deleted.", "success")
+    else:
+        flash("CSRF validation failed.", "error")
+    return redirect(url_for(".transfer_keywords"))

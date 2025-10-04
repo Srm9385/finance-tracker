@@ -40,7 +40,6 @@
         <td><em>{{ s.reason }}</em></td>
         <td>
           <label>
-            {% set transfer_keywords = ['transfer', 'venmo', 'zelle', 'Credit Card Payment Received'] %}
             {% set checked = namespace(value=false) %}
             {% for keyword in transfer_keywords %}
               {# Ensure both sides of the comparison are lowercase #}

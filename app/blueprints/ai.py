@@ -1,25 +1,55 @@
 # srm9385/finance-tracker/finance-tracker-b6479a0b9b4b550a18703e80c76c724f6985583c/app/blueprints/ai.py
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from ..extensions import db
-from ..models import Transaction, Category, Rule  # <-- Import Rule
+from ..models import Transaction, Category, Rule, Institution, Account, TransferKeyword  # <-- Import Rule
 from ..services.ai_categorizer import get_category_suggestions, is_ai_configured
-from ..forms import CSRFOnlyForm
+from ..forms import CSRFOnlyForm, AICategorizeForm
 
 bp = Blueprint("ai", __name__, url_prefix="/ai")
 
 
 @bp.route("/categorize", methods=["GET", "POST"])
 def categorize():
-    form = CSRFOnlyForm()
+    # Use request.form for POST and request.args for GET to populate the form
+    form_data = request.form if request.method == 'POST' else request.args
+    form = AICategorizeForm(form_data)
+
+    # Always populate institution choices
+    form.institution_id.choices = [("", "All Institutions")] + [(str(i.id), i.name) for i in Institution.query.order_by(Institution.name).all()]
+
+    # Get selected institution ID (will be a string or None)
+    selected_institution_id_str = form.institution_id.data
+
+    # Populate account choices based on selected institution
+    if selected_institution_id_str:
+        try:
+            selected_institution_id = int(selected_institution_id_str)
+            form.account_id.choices = [("", "All Accounts")] + [(str(a.id), a.name) for a in Account.query.filter_by(institution_id=selected_institution_id).order_by(Account.name).all()]
+        except (ValueError, TypeError):
+            # Handle cases where the institution ID is invalid
+            form.account_id.choices = [("", "All Accounts")]
+    else:
+        form.account_id.choices = [("", "All Accounts")]
+
 
     if not is_ai_configured():
         flash("AI features are not configured. Please set OPENAI variables in your .env file.", "warning")
         return render_template("ai/categorize.html", suggestions=None, form=form)
 
-    if request.method == "POST":
-        scope = request.form.get("scope", "uncategorized")
+    if form.validate_on_submit() and request.method == 'POST':
+        scope = form.scope.data
+        account_id_str = form.account_id.data
+        institution_id_str = form.institution_id.data
 
         query = Transaction.query
+
+        # Apply filters based on selection
+        if institution_id_str:
+             query = query.join(Account).filter(Account.institution_id == int(institution_id_str))
+        if account_id_str:
+            query = query.filter(Transaction.account_id == int(account_id_str))
+
+
         if scope == "uncategorized":
             query = query.filter(Transaction.category_id.is_(None))
 
@@ -27,19 +57,16 @@ def categorize():
         all_categories = Category.query.all()
 
         if not transactions_to_review:
-            flash("No transactions found for the selected scope.", "info")
+            flash("No transactions found for the selected scope and account.", "info")
             return redirect(url_for(".categorize"))
 
-        # --- START MODIFICATION ---
         suggestions = []
         llm_batch = []
 
-        # Load all rules from the database
         rules = Rule.query.all()
 
         for t in transactions_to_review:
             matched_rule = None
-            # Find the first rule that matches the transaction description
             for rule in rules:
                 if rule.keyword.upper() in t.description_raw.upper():
                     matched_rule = rule
@@ -53,7 +80,6 @@ def categorize():
                 })
             else:
                 llm_batch.append(t)
-        # --- END MODIFICATION ---
 
         if llm_batch:
             llm_suggestions, error = get_category_suggestions(llm_batch, all_categories)
@@ -66,10 +92,11 @@ def categorize():
         session['ai_suggestions'] = suggestions
         return redirect(url_for(".review_suggestions"))
 
-    return render_template("ai/categorize.html", suggestions=None, form=form)
-
+    # For GET requests or failed POST validation, render the form template
+    return render_template("ai/categorize.html", form=form)
 
 # (The rest of the file remains unchanged)
+
 @bp.route("/review_suggestions")
 def review_suggestions():
     suggestions = session.get('ai_suggestions', [])
@@ -82,16 +109,23 @@ def review_suggestions():
     # --- START MODIFICATION ---
     # Sort by name first for consistency
     all_categories = Category.query.order_by(Category.name, Category.group).all()
-    # --- END MODIFICATION ---
-
+    transfer_keywords = [kw.keyword for kw in TransferKeyword.query.all()]
+    print(f"DEBUG: Keywords being sent to template: {transfer_keywords}")
     form = CSRFOnlyForm()
     return render_template(
         "ai/review.html",
         suggestions=suggestions,
         transactions=transactions,
         all_categories=all_categories,
+        transfer_keywords=transfer_keywords, # Pass keywords to template
         form=form
     )
+
+@bp.route("/accounts-for-institution/<int:institution_id>")
+def accounts_for_institution(institution_id):
+    accounts = Account.query.filter_by(institution_id=institution_id, is_active=True).order_by(Account.name).all()
+    accounts_data = [{'id': acc.id, 'name': acc.name} for acc in accounts]
+    return jsonify(accounts_data)
 
 @bp.route("/apply_suggestions", methods=["POST"])
 def apply_suggestions():

@@ -1,6 +1,6 @@
 from wtforms import SubmitField
 from wtforms import StringField, SelectField, FileField, BooleanField, TextAreaField, SubmitField, DateField, DecimalField
-from wtforms.validators import DataRequired
+from wtforms.validators import DataRequired, Optional
 from flask_wtf import FlaskForm
 
 ACCOUNT_TYPES = [
@@ -60,6 +60,12 @@ class ReviewDecisionForm(FlaskForm):
 class CSRFOnlyForm(FlaskForm):
     submit = SubmitField("Submit")
 
+class AICategorizeForm(FlaskForm):
+    institution_id = SelectField("Institution", validators=[Optional()])
+    account_id = SelectField("Account", validators=[Optional()])
+    scope = StringField("Scope", default="uncategorized")
+    submit = SubmitField("Get Suggestions")
+
 class CategoryForm(FlaskForm):
     group = StringField("Category Group", validators=[DataRequired()])
     name = StringField("Category Name", validators=[DataRequired()])
@@ -77,6 +83,12 @@ class RuleForm(FlaskForm):
                           render_kw={"placeholder": "e.g., AMAZON"})
     category_id = SelectField("Category", coerce=int, validators=[DataRequired()])
     submit = SubmitField("Save Rule")
+
+class TransferKeywordForm(FlaskForm):
+    """Form for adding a new transfer keyword."""
+    keyword = StringField("Keyword", validators=[DataRequired()],
+                          render_kw={"placeholder": "e.g., VENMO"})
+    submit = SubmitField("Add Keyword")
 
 class RestoreForm(FlaskForm):
     """Form for uploading a database backup file."""

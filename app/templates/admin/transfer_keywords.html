@@ -1,0 +1,43 @@
+{# app/templates/admin/transfer_keywords.html #}
+{% extends 'base.html' %}
+{% block content %}
+<h2>Manage Transfer Keywords</h2>
+<p>Keywords that automatically mark a transaction as a transfer during AI review.</p>
+
+<article>
+  <header><strong>Add New Keyword</strong></header>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <label>{{ form.keyword.label }} {{ form.keyword() }}</label>
+    {{ form.submit(class="contrast") }}
+  </form>
+</article>
+
+<hr/>
+
+<table>
+  <thead>
+    <tr>
+      <th>Keyword</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for kw in keywords %}
+    <tr>
+      <td class="mono">{{ kw.keyword }}</td>
+      <td>
+        <form method="post" action="{{ url_for('admin.transfer_keyword_delete', keyword_id=kw.id) }}" style="display: inline-block;" onsubmit="return confirm('Are you sure you want to delete this keyword?');">
+          {{ csrf_form.hidden_tag() }}
+          <button type="submit" class="secondary outline">Delete</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr>
+      <td colspan="2" class="muted">No transfer keywords created yet.</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

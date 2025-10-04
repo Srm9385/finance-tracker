@@ -100,7 +100,10 @@ This step creates the necessary tables in your database.
 
 ```bash
 # Initialize the database
+flask db init
+flask db migrate -m "Initial database schema"
 flask db upgrade
+
 
 # Seed the database with an admin user and default data
 flask seed

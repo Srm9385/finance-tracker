@@ -4,11 +4,11 @@ import uuid
 import pandas as pd
 from flask import (
     Blueprint, render_template, request, redirect,
-    url_for, flash, current_app, abort
+    url_for, flash, current_app, abort, jsonify
 )
 from ..models import Institution, Account, Mapper, Import, Transaction
 from ..forms import ImportUploadForm, ReviewDecisionForm, MappingWizardForm
-from ..services.importer import run_import, _normalize_frame # <-- import _normalize_frame
+from ..services.importer import run_import, _normalize_frame
 from ..services.review import commit_import
 from ..services.mapping import create_mapper, guess_mapping_from_headers
 from datetime import datetime
@@ -18,43 +18,47 @@ from ..forms import CSRFOnlyForm
 
 bp = Blueprint("imports", __name__)
 
+
 @bp.route("/upload", methods=["GET", "POST"])
 def upload():
     form = ImportUploadForm()
 
-    # Populate choices
+    # --- START MODIFICATION ---
+    # Populate choices for ALL requests to ensure validation works on POST
     form.institution_id.choices = [
         (i.id, i.name) for i in Institution.query.filter_by(is_active=True).order_by(Institution.name).all()
     ]
-    selected_inst = (
-        form.institution_id.data
-        or (form.institution_id.choices[0][0] if form.institution_id.choices else None)
-    )
 
-    form.account_id.choices = (
-        [
+    # Determine the selected institution from form data on POST, or default to the first on GET
+    selected_inst_id = None
+    if form.institution_id.data:
+        selected_inst_id = form.institution_id.data
+    elif form.institution_id.choices:
+        selected_inst_id = form.institution_id.choices[0][0]
+
+    # Populate account choices based on the selected institution
+    if selected_inst_id:
+        form.account_id.choices = [
             (a.id, f"{a.name} ({a.type})")
-            for a in Account.query.filter_by(institution_id=selected_inst, is_active=True).order_by(Account.name)
+            for a in Account.query.filter_by(institution_id=selected_inst_id, is_active=True).order_by(Account.name)
         ]
-        if selected_inst
-        else []
-    )
-    acct_id = form.account_id.data or (
-        form.account_id.choices[0][0] if form.account_id.choices else None
-    )
 
-    # Mappers (optional). First item is sentinel for "guess from CSV".
-    mapper_choices = [(-1, "Guess from CSV (no mapping)")]
-    if selected_inst and acct_id:
-        mapper_choices += [
-            (m.id, f"v{m.version}")
-            for m in Mapper.query.filter_by(
-                institution_id=selected_inst, account_id=acct_id
-            ).order_by(Mapper.version.desc())
-        ]
-    form.mapper_id.choices = mapper_choices
+        # Determine the selected account
+        selected_acct_id = form.account_id.data
+        if not selected_acct_id and form.account_id.choices:
+            selected_acct_id = form.account_id.choices[0][0]
 
-    if request.method == "POST" and form.validate_on_submit():
+        # Populate mapper choices based on the selected account
+        if selected_acct_id:
+            form.mapper_id.choices = [(-1, "Guess from CSV (no mapping)")] + [
+                (m.id, f"v{m.version}")
+                for m in Mapper.query.filter_by(account_id=selected_acct_id).order_by(Mapper.version.desc())
+            ]
+        else:
+            form.mapper_id.choices = [(-1, "Guess from CSV (no mapping)")]
+    # --- END MODIFICATION ---
+
+    if form.validate_on_submit():  # This is only true for POST
         institution = Institution.query.get(form.institution_id.data)
         account = Account.query.get(form.account_id.data)
         f = request.files["file"]
@@ -89,15 +93,7 @@ def upload():
         }
         return redirect(url_for(".wizard_from_upload", token=token))
 
-    if request.method == "POST" and not form.validate():
-        errs = "; ".join(
-            f"{name}: {', '.join(msgs)}" for name, msgs in form.errors.items()
-        )
-        if errs:
-            flash(f"Upload form errors — {errs}", "error")
-
     return render_template("imports/upload.html", form=form)
-
 
 @bp.route("/wizard/<token>", methods=["GET", "POST"])
 def wizard_from_upload(token):
@@ -182,9 +178,21 @@ def wizard_from_upload(token):
     )
 
 
-# ... (rest of the file: review, log, history, commit, delete_import_txns) ...
-# Note: No changes are needed for the rest of the functions in this file.
-# The original functions for review, log, etc., are left as they were.
+@bp.route("/accounts-for-institution/<int:institution_id>")
+def accounts_for_institution(institution_id):
+    accounts = Account.query.filter_by(institution_id=institution_id, is_active=True).order_by(Account.name).all()
+
+    accounts_data = []
+    for acc in accounts:
+        mappers = Mapper.query.filter_by(account_id=acc.id).order_by(Mapper.version.desc()).all()
+        accounts_data.append({
+            'id': acc.id,
+            'name': f"{acc.name} ({acc.type})",
+            'mappers': [{'id': m.id, 'name': f"v{m.version}"} for m in mappers]
+        })
+
+    return jsonify(accounts_data)
+
 
 @bp.route("/review/<int:import_id>", methods=["GET", "POST"])
 def review(import_id):

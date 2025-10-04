@@ -1,278 +1,143 @@
+
 # Local Finance Tracker
 
-A personal finance tracking application built with Python and Flask.  
-It is designed to run entirely on a local machine, using manual CSV imports to track transactions without relying on external APIs or cloud services.
+A personal finance tracking application built with Python and Flask. It is designed to run entirely on a local machine, using manual CSV imports to track transactions without relying on external APIs or cloud services. The application is enhanced with a local AI-powered categorization assistant and a robust set of administrative tools.
 
----
+## Features ✨
 
-## Stack
-- **Flask** – web framework  
-- **Jinja** – templating engine  
-- **SQLAlchemy (PostgreSQL)** – ORM & database  
-- **Flask‑Migrate** – Alembic migrations  
-- **WTForms** – form handling  
-- **pandas** – CSV parsing  
+  * **CSV Import:** Manually import transactions from your bank's CSV exports.
+  * **Interactive Transaction Table:** View, sort, and resize columns on the fly with a powerful, client-side rendered table.
+  * **AI-Powered Categorization:** Get intelligent category suggestions for your transactions using a local language model.
+  * **Rule-Based Categorization:** Create custom rules to automatically categorize transactions based on keywords in the description.
+  * **Manual Override:** Easily override AI and rule-based suggestions to ensure your data is always accurate.
+  * **Admin Dashboard:** A central place to manage:
+      * Institutions and accounts
+      * Transaction categories
+      * Categorization rules
+  * **Backup and Restore:** Create a complete backup of your database and configuration, and restore it on a new or existing installation.
+  * **Self-Contained:** All necessary JavaScript libraries and CSS are stored locally, so the application can run entirely offline.
 
----
+## Tech Stack 🛠️
 
-## Table of Contents
+  * **Backend:** Python, Flask, SQLAlchemy
+  * **Database:** PostgreSQL
+  * **Frontend:** Jinja2, Pico.css, Tabulator.js, Luxon.js
+  * **Migrations:** Flask-Migrate (Alembic)
+  * **Forms:** WTForms
 
-1. [Prerequisites](#prerequisites)
-2. [Zero to Running: Quickstart](#zero-to-running-quickstart)
-3. [Detailed Setup Guide](#detailed-setup-guide)  
-   3.1. [Step 1: PostgreSQL Installation](#step-1-postgresql-installation)  
-   &nbsp;&nbsp;• Option A – Arch Linux (fish shell)  
-   &nbsp;&nbsp;• Option B – Debian/Ubuntu (bash shell)  
-   3.2. [Step 2: Application Setup](#step-2-application-setup)  
-   3.3. [Step 3: Database Initialization (First‑time setup)](#step-3-database-initialization-first-time-setup)  
-   3.4. [Step 4: Run the Application](#step-4-run-the-application)  
-4. [Troubleshooting](#troubleshooting)
+## Setup and Installation 🚀
 
----
-
-## Prerequisites
+### 1\. Prerequisites
 
 Before you begin, make sure you have the following installed:
 
-| Item | Minimum Version |
-|------|-----------------|
-| Python | 3.10 or newer |
-| PostgreSQL | 12 or newer |
-| git | – |
+| Item         | Minimum Version |
+|--------------|-----------------|
+| Python       | 3.10 or newer   |
+| PostgreSQL   | 12 or newer     |
+| git          | –               |
 
----
+### 2\. PostgreSQL Setup
 
-## Zero to Running: Quickstart
-
-For users who already have PostgreSQL set up and just want a fast‑track install:
+You need to create a database and a user for the application.
 
 ```bash
-# Clone the repository and enter it
-git clone https://github.com/Srm9385/finance-tracker.git
-cd finance-tracker
+# Create a user (you will be prompted for a password)
+sudo -u postgres createuser -P fin_user
 
-# Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate      # (fish: source .venv/bin/activate.fish)
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Create a database & user in PostgreSQL, grant ownership
-# (See the detailed guide for exact commands.)
-
-# Copy example env and fill in your own values
-cp .env.example .env
-```
-
-Edit `.env`:
-
-```dotenv
-FLASK_APP=wsgi.py
-FLASK_ENV=development
-SECRET_KEY='generate-a-long-random-string'
-DATABASE_URL='postgresql://youruser:yourpassword@localhost:5432/yourdbname'
-```
-
-Initialize the database (first‑time only):
-
-```bash
-rm -rf migrations          # Remove any old/stale migrations
-flask db init
-
-# IMPORTANT: Replace migrations/env.py with the correct version below (see detailed guide)
-flask db migrate -m "Initial database schema"
-flask db upgrade
-```
-
-Seed the database and start the server:
-
-```bash
-flask seed
-flask run
-```
-
-The application will be available at `http://127.0.0.1:5000`.  
-Login with **admin / admin**.
-
----
-
-## Detailed Setup Guide
-
-### Step 1: PostgreSQL Installation
-
-#### Option A – Arch Linux (fish shell)
-
-```bash
-sudo pacman -S postgresql
-sudo -iu postgres initdb --locale=en_US.UTF-8 -D /var/lib/postgres/data
-sudo systemctl start postgresql.service
-sudo systemctl enable postgresql.service
-
-# Create a user and database
-sudo -iu postgres createuser -P fin_user          # set password when prompted
-sudo -iu postgres createdb -O fin_user finance_db
-
-# Configure password authentication (CRITICAL)
-sudo nano /var/lib/postgres/data/pg_hba.conf
-```
-
-In the editor, change the `peer` or `ident` lines to:
-
-```text
-local   all             all             scram-sha-256
-host    all             all             127.0.0.1/32    scram-sha-256
-```
-
-Save and restart PostgreSQL:
-
-```bash
-sudo systemctl restart postgresql.service
-```
-
-#### Option B – Debian / Ubuntu (bash shell)
-
-```bash
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-
-# Create a user and database
-sudo -u postgres createuser -P fin_user          # set password when prompted
+# Create the database and assign ownership
 sudo -u postgres createdb -O fin_user finance_db
-
-# Configure password authentication (CRITICAL)
-sudo nano /etc/postgresql/14/main/pg_hba.conf   # path may vary by PG version
 ```
 
-Change `peer` to `scram-sha-256`:
+Next, ensure PostgreSQL is configured for password authentication by editing `pg_hba.conf` and changing `peer` to `scram-sha-256` for `local` connections.
 
-```text
-local   all             all             scram-sha-256
-```
+### 3\. Application Setup
 
-Restart PostgreSQL:
-
-```bash
-sudo systemctl restart postgresql.service
-```
-
----
-
-### Step 2: Application Setup
+Clone the repository, create a virtual environment, and install the dependencies.
 
 ```bash
 git clone https://github.com/Srm9385/finance-tracker.git
 cd finance-tracker
 
 python -m venv .venv
-source .venv/bin/activate      # (fish: source .venv/bin/activate.fish)
+source .venv/bin/activate
 
 pip install -r requirements.txt
+```
 
-# Create a .env file
+### 4\. Environment Configuration (`.env`)
+
+Create a `.env` file in the root of the project by copying the example file:
+
+```bash
 cp .env.example .env
 ```
 
-Edit `.env`:
+Now, edit the `.env` file with your specific configuration:
 
 ```dotenv
+# Flask Settings
 FLASK_APP=wsgi.py
 FLASK_ENV=development
 SECRET_KEY='generate-a-long-random-string-here'
 
-# PostgreSQL connection string
+# Database Connection
 DATABASE_URL='postgresql://fin_user:your-password-here@localhost:5432/finance_db'
+
+# AI Categorization (Optional)
+OPENAI_API_BASE='http://localhost:11434/v1' # Your local LLM API endpoint
+OPENAI_API_KEY='ollama'
+OPENAI_MODEL_NAME='llama3'
+
+# Default Categories and Rules (Optional, for seeding)
+DEFAULT_CATEGORIES_JSON='[{"group": "Housing & Utilities", "name": "Rent/Mortgage"}, ...]'
+DEFAULT_RULES_JSON='{"Entertainment": ["AMAZON", "AMZN"], ...}'
 ```
 
----
+### 5\. Database Initialization
 
-### Step 3: Database Initialization (First‑time setup)
+This step creates the necessary tables in your database.
 
-1. **Reset migration history**
+```bash
+# Initialize the database
+flask db upgrade
 
-   ```bash
-   rm -rf migrations
-   ```
+# Seed the database with an admin user and default data
+flask seed
+flask seed-categories
+flask seed-rules
+```
 
-2. **Create a new migration environment**
+### 6\. Run the Application
 
-   ```bash
-   flask db init
-   ```
+You're all set\! Start the Flask development server:
 
-3. **Replace `migrations/env.py`**  
-   The default file must be replaced with the following content (CRITICAL for Flask‑Migrate to find your models):
+```bash
+flask run
+```
 
-   ```python
-   # migrations/env.py
-   from __future__ import with_statement
-   import os
-   from logging.config import fileConfig
-   from alembic import context
-   from flask import current_app
+Open your browser to `http://127.0.0.1:5000` and log in with the credentials **admin / admin**.
 
-   config = context.config
+## Backup and Restore 💾
 
-   if config.config_file_name is not None:
-       fileConfig(config.config_file_name)
+The application includes a powerful backup and restore feature to keep your data safe.
 
-   # --- CRITICAL ---
-   # Import models so Alembic sees them
-   from app import models
-   # ----------------
+### Creating a Backup
 
-   target_metadata = current_app.extensions['migrate'].db.metadata
+1.  Navigate to the **Admin** page.
+2.  Click on **Go to Backup/Restore**.
+3.  Click the **Create and Download Backup** button.
 
-   def run_migrations_offline():
-       url = current_app.config.get("SQLALCHEMY_DATABASE_URI")
-       context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
-       with context.begin_transaction():
-           context.run_migrations()
+This will generate a `.tar.gz` archive containing a complete SQL dump of your database and a copy of your `.env` file.
 
-   def run_migrations_online():
-       connectable = current_app.extensions['migrate'].db.engine
-       with connectable.connect() as connection:
-           context.configure(connection=connection, target_metadata=target_metadata)
-           with context.begin_transaction():
-               context.run_migrations()
+### Restoring from a Backup
 
-   if context.is_offline_mode():
-       run_migrations_offline()
-   else:
-       run_migrations_online()
-   ```
+1.  **On a fresh installation, make sure you have completed all the setup steps up to and including database initialization (`flask db upgrade`).**
+2.  Navigate to the **Admin -\> Backup/Restore** page.
+3.  Under "Restore from Backup," choose your `.tar.gz` backup file and click "Restore from Backup."
+4.  **Important:** After the restore is complete, manually replace the `.env` file in your project with the one from your backup archive and restart the application.
 
-4. **Generate and apply the initial migration**
-
-   ```bash
-   flask db migrate -m "Initial database schema"
-   flask db upgrade
-   ```
-
----
-
-### Step 4: Run the Application
-
-1. **Seed the database** (creates the default admin user)
-
-   ```bash
-   flask seed
-   ```
-
-2. **Start the Flask development server**
-
-   ```bash
-   flask run
-   ```
-
-Open your browser at `http://127.0.0.1:5000`.  
-Login using **admin / admin**.
-
----
-
-## Troubleshooting
-
-### How to Reset Everything
+## Troubleshooting 🔩
 
 If you encounter persistent database issues and want a completely clean slate:
 
@@ -291,8 +156,4 @@ CREATE DATABASE finance_db OWNER fin_user;
 \q
 ```
 
-Then repeat the **Database Initialization** steps from Section 3.
-
----
-
-*Happy tracking!*
+Then, repeat the **Database Initialization** steps from Section 5.

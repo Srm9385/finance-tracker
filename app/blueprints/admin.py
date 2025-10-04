@@ -1,11 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
-from ..extensions import db
-from ..services.mapping import create_mapper
-from ..models import Institution, Account, Category, Transaction, Rule
-from ..forms import InstitutionForm, AccountForm, MappingWizardForm, CSRFOnlyForm, CategoryForm, RuleForm
 from sqlalchemy.exc import IntegrityError
-
-# --- END: THE FIX ---
+from ..extensions import db
+from ..services.mapping import create_mapper, latest_mapper_for
+from ..models import Institution, Account, Category, Transaction, Rule
+from ..forms import (InstitutionForm, AccountForm, MappingWizardForm,
+                     CSRFOnlyForm, CategoryForm, RuleForm)
+import json
 
 bp = Blueprint("admin", __name__)
 
@@ -14,11 +14,7 @@ bp = Blueprint("admin", __name__)
 def index():
     inst_form = InstitutionForm(prefix="inst")
     acct_form = AccountForm(prefix="acct")
-
-    # --- START: THE FIX ---
-    # Create an instance of the CSRF-only form
     csrf_form = CSRFOnlyForm()
-    # --- END: THE FIX ---
 
     acct_form.institution_id.choices = [(i.id, i.name) for i in Institution.query.order_by(Institution.name).all()]
 
@@ -55,40 +51,41 @@ def index():
         acct_form=acct_form,
         institutions=institutions,
         accounts=accounts,
-        # --- START: THE FIX ---
-        # Pass the form to the template context
         csrf_form=csrf_form
-        # --- END: THE FIX ---
     )
 
 
-@bp.route("/mappers/new/<int:institution_id>/<int:account_id>", methods=["GET", "POST"])
-def mapper_new(institution_id, account_id):
-    # This function remains unchanged
-    form = MappingWizardForm()
-    if form.validate_on_submit():
-        schema = dict(
-            date_col=form.date_col.data,
-            date_fmt=form.date_fmt.data,
-            desc_col=form.desc_col.data,
-            amount_col=form.amount_col.data or None,
-            debit_col=form.debit_col.data or None,
-            credit_col=form.credit_col.data or None,
-            balance_col=form.balance_col.data or None,
-            exclude_pending=form.exclude_pending.data,
-            # Added from a previous refactor, ensure it's here
-            indicator_col=form.indicator_col.data or None
-        )
-        mapper = create_mapper(institution_id, account_id, schema)
-        flash(f"Mapping v{mapper.version} saved", "success")
-        return redirect(url_for("admin.index"))  # Redirect to main admin page
-
-    # Pre-populate with guessed data if available (no-op for now, but good practice)
+@bp.route("/mappers/edit/<int:institution_id>/<int:account_id>", methods=["GET", "POST"])
+def mapper_edit(institution_id, account_id):
+    """
+    Handles both creating a new mapper and editing the latest existing one.
+    A new version is always created upon saving.
+    """
     account = Account.query.get_or_404(account_id)
-    return render_template("admin/mapper_edit.html", form=form, account=account)
+    institution = Institution.query.get_or_404(institution_id)
+    latest_mapper = latest_mapper_for(account_id, institution_id)
 
+    form = MappingWizardForm()
 
-# --- Add the edit/toggle routes from the previous refactor ---
+    if form.validate_on_submit():
+        schema = {
+            "date_col": form.date_col.data, "date_fmt": form.date_fmt.data,
+            "desc_col": form.desc_col.data, "amount_col": form.amount_col.data or None,
+            "debit_col": form.debit_col.data or None, "credit_col": form.credit_col.data or None,
+            "balance_col": form.balance_col.data or None, "exclude_pending": form.exclude_pending.data,
+            "indicator_col": form.indicator_col.data or None
+        }
+        # This always creates a new version, preserving history
+        mapper = create_mapper(institution_id, account_id, schema)
+        flash(f"Mapping v{mapper.version} saved.", "success")
+        return redirect(url_for("admin.index"))
+
+    # On GET request, populate form with the latest mapper's data if it exists
+    if not form.is_submitted() and latest_mapper:
+        form = MappingWizardForm(data=latest_mapper.schema_json)
+
+    return render_template("admin/mapper_edit.html", form=form, account=account, institution=institution)
+
 @bp.route("/institution/<int:institution_id>/edit", methods=["GET", "POST"])
 def institution_edit(institution_id):
     institution = Institution.query.get_or_404(institution_id)
@@ -100,10 +97,8 @@ def institution_edit(institution_id):
         return redirect(url_for(".index"))
     return render_template("admin/institution_edit.html", form=form, institution=institution)
 
-
 @bp.route("/institution/<int:institution_id>/toggle_active", methods=["POST"])
 def institution_toggle_active(institution_id):
-    # A simple CSRF check for this POST request
     form = CSRFOnlyForm()
     if form.validate_on_submit():
         institution = Institution.query.get_or_404(institution_id)
@@ -144,7 +139,7 @@ def account_toggle_active(account_id):
 
 @bp.route("/categories", methods=["GET", "POST"])
 def categories():
-    """Route for listing and creating categories."""
+    """Route for listing, creating, and exporting categories."""
     form = CategoryForm()
     csrf_form = CSRFOnlyForm()
     if form.validate_on_submit():
@@ -155,7 +150,24 @@ def categories():
         return redirect(url_for(".categories"))
 
     all_categories = Category.query.order_by(Category.group, Category.name).all()
-    return render_template("admin/categories.html", form=form, categories=all_categories, csrf_form=csrf_form)
+
+    # --- START MODIFICATION ---
+    # Generate the JSON string for export
+    categories_export_list = [
+        {'group': c.group, 'name': c.name} for c in all_categories
+    ]
+    # Use single quotes for the outer JSON string to work well in a .env file
+    categories_json_string = f"DEFAULT_CATEGORIES_JSON='{json.dumps(categories_export_list)}'"
+    # --- END MODIFICATION ---
+
+    return render_template(
+        "admin/categories.html",
+        form=form,
+        categories=all_categories,
+        csrf_form=csrf_form,
+        categories_json_string=categories_json_string # Pass the string to the template
+    )
+
 
 @bp.route("/category/<int:category_id>/edit", methods=["GET", "POST"])
 def category_edit(category_id):
@@ -177,7 +189,6 @@ def category_delete(category_id):
     form = CSRFOnlyForm()
     if form.validate_on_submit():
         category = Category.query.get_or_404(category_id)
-        # Check if any transactions are using this category
         if Transaction.query.filter_by(category_id=category.id).first():
             flash(f"Cannot delete category '{category.name}' as it is in use.", "error")
         else:
@@ -188,11 +199,11 @@ def category_delete(category_id):
         flash("CSRF validation failed.", "error")
     return redirect(url_for(".categories"))
 
+
 @bp.route("/rules", methods=["GET", "POST"])
 def rules():
     """Route for listing and creating rules."""
     form = RuleForm()
-    # Sort by name and update display format
     form.category_id.choices = [
         (c.id, f"{c.name} / {c.group}") for c in Category.query.order_by(Category.name, Category.group).all()
     ]
@@ -209,7 +220,7 @@ def rules():
             flash(f"Error: A rule for the keyword '{form.keyword.data}' already exists.", "error")
 
     all_rules = Rule.query.order_by(Rule.keyword).all()
-    csrf_form = CSRFOnlyForm() # For the delete buttons
+    csrf_form = CSRFOnlyForm()
     return render_template("admin/rules.html", form=form, rules=all_rules, csrf_form=csrf_form)
 
 
@@ -218,10 +229,10 @@ def rule_edit(rule_id):
     """Route for editing a rule."""
     rule = Rule.query.get_or_404(rule_id)
     form = RuleForm(obj=rule)
-    # Sort by name and update display format
     form.category_id.choices = [
         (c.id, f"{c.name} / {c.group}") for c in Category.query.order_by(Category.name, Category.group).all()
     ]
+
     if form.validate_on_submit():
         rule.keyword = form.keyword.data
         rule.category_id = form.category_id.data

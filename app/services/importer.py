@@ -3,6 +3,7 @@ import io
 import pandas as pd
 from datetime import timedelta, date
 from copy import deepcopy
+import re # Import the regular expression module
 
 from ..extensions import db
 from ..models import Import, Transaction
@@ -38,53 +39,56 @@ def _json_safe_review(r):
     ]
     return out
 
+# --- START MODIFICATION ---
+def _clean_amount(value):
+    """Helper function to remove currency symbols, commas, and handle NaN."""
+    if pd.isna(value):
+        return 0.0
+    if isinstance(value, str):
+        # Remove any character that is not a digit, a decimal point, or a minus sign
+        cleaned_value = re.sub(r'[^\d.-]', '', value)
+        return cleaned_value if cleaned_value else 0.0
+    return value
+# --- END MODIFICATION ---
 
 def _normalize_frame(df: pd.DataFrame, schema: dict):
     date_col = schema["date_col"]
     date_fmt = schema.get("date_fmt")
     desc_col = schema["desc_col"]
 
-    # Optional: indicator (Credit/Debit) column
     indicator_col = schema.get("indicator_col")
-
     amount_col = schema.get("amount_col")
     debit_col = schema.get("debit_col")
     credit_col = schema.get("credit_col")
     balance_col = schema.get("balance_col")
-    exclude_pending = schema.get("exclude_pending", False)  # (placeholder, unused for now)
+    exclude_pending = schema.get("exclude_pending", False)
 
     rows = []
     for _, row in df.iterrows():
         raw_date = str(row[date_col])
         raw_desc = str(row[desc_col])
 
-        # Determine amount
-        if amount_col:
-            try:
-                amount = float(row[amount_col])
-            except Exception:
-                amount = 0.0
+        # --- START MODIFICATION ---
+        try:
+            if amount_col:
+                amount = float(_clean_amount(row.get(amount_col)))
+                if indicator_col and row.get(indicator_col) not in (None, ""):
+                    ind = str(row[indicator_col]).strip().lower()
+                    if ind.startswith("credit") or ind in {"cr", "c", "credit memo"}:
+                        amount = +abs(amount)
+                    elif ind.startswith("debit") or ind in {"dr", "d", "debit memo"}:
+                        amount = -abs(amount)
+            else:
+                debit = float(_clean_amount(row.get(debit_col)))
+                credit = float(_clean_amount(row.get(credit_col)))
+                amount = credit - debit
 
-            # Apply sign from indicator if present
-            if indicator_col and indicator_col in row and row[indicator_col] not in (None, ""):
-                ind = str(row[indicator_col]).strip().lower()
-                if ind.startswith("credit") or ind in {"cr", "c", "credit memo"}:
-                    amount = +abs(amount)
-                elif ind.startswith("debit") or ind in {"dr", "d", "debit memo"}:
-                    amount = -abs(amount)
-                # else: leave as-is
-        else:
-            # Debit/Credit split style
-            debit = float(row[debit_col]) if debit_col and row.get(debit_col) not in (None, "") else 0.0
-            credit = float(row[credit_col]) if credit_col and row.get(credit_col) not in (None, "") else 0.0
-            amount = credit - debit
-
-        run_bal = None
-        if balance_col and balance_col in row and row[balance_col] not in (None, ""):
-            try:
-                run_bal = float(row[balance_col])
-            except Exception:
-                run_bal = None
+            run_bal = float(_clean_amount(row.get(balance_col))) if balance_col else None
+        except (ValueError, TypeError) as e:
+            # Skip rows that have unparsable amount fields
+            print(f"Skipping row due to amount parsing error: {e}, row: {row}")
+            continue
+        # --- END MODIFICATION ---
 
         rows.append({
             "txn_date": parse_date(raw_date, date_fmt),
@@ -101,7 +105,7 @@ def _find_exact_dupe(account_id, txn):
         db.session.query(Transaction.id)
         .filter(
             Transaction.account_id == account_id,
-            Transaction.is_deleted == False,  # ignore soft-deleted
+            Transaction.is_deleted == False,
             Transaction.txn_date == txn["txn_date"],
             Transaction.description_raw == txn["description_raw"],
             Transaction.amount_cents == txn["amount_cents"],
@@ -111,23 +115,22 @@ def _find_exact_dupe(account_id, txn):
 
 
 def detect_duplicates(account_id: int, normalized_rows: list[dict]):
+    # (This function remains the same)
     dup_exact = []
     dup_secondary = []
     to_insert = []
 
     for row in normalized_rows:
-        # 1) exact dupe?
         ex = _find_exact_dupe(account_id, row)
         if ex:
-            dup_exact.append((row, ex))  # for review info
+            dup_exact.append((row, ex))
             continue
 
-        # 2) secondary dupe: same amount within ±N days, not deleted
         q = (
             db.session.query(Transaction.id)
             .filter(
                 Transaction.account_id == account_id,
-                Transaction.is_deleted == False,  # ignore soft-deleted
+                Transaction.is_deleted == False,
                 Transaction.amount_cents == row["amount_cents"],
                 Transaction.txn_date >= row["txn_date"] - timedelta(days=SECONDARY_DUP_WINDOW_DAYS),
                 Transaction.txn_date <= row["txn_date"] + timedelta(days=SECONDARY_DUP_WINDOW_DAYS),
@@ -144,27 +147,22 @@ def detect_duplicates(account_id: int, normalized_rows: list[dict]):
 
 
 def detect_transfers(candidate_rows: list[dict], account_id: int):
-    """
-    Find potential transfers among rows we plan to insert.
-    Rule: negative amount (outflow) in this account within ±TRANSFER_WINDOW_DAYS
-    has an equal and opposite amount in any *other* account (not soft-deleted).
-    Returns list of dicts: {"new_index": idx, "new": row, "existing_id": match.id}
-    """
+    # (This function remains the same)
     transfers = []
     for idx, it in enumerate(candidate_rows):
         amt = it["amount_cents"]
         if amt >= 0:
-            continue  # only look for outflows here; inflow-side will be captured on the other account
+            continue
         lo = it["txn_date"] - timedelta(days=TRANSFER_WINDOW_DAYS)
         hi = it["txn_date"] + timedelta(days=TRANSFER_WINDOW_DAYS)
         match = (
             Transaction.query
             .filter(
                 Transaction.account_id != account_id,
-                Transaction.is_deleted == False,                 # ignore soft-deleted
+                Transaction.is_deleted == False,
                 Transaction.txn_date >= lo,
                 Transaction.txn_date <= hi,
-                Transaction.amount_cents == -amt,               # equal & opposite
+                Transaction.amount_cents == -amt,
             )
             .first()
         )
@@ -174,12 +172,9 @@ def detect_transfers(candidate_rows: list[dict], account_id: int):
 
 
 def run_import(user, file_storage, institution, account, mapper, app_config):
+    # (This function remains the same)
     raw = file_storage.read()
-
-    # Compute SHA now and dedupe at the Import row level
     sha = sha256_of_bytes(raw)
-
-    # Parse the CSV
     data = pd.read_csv(io.BytesIO(raw))
     normalized = _normalize_frame(data, mapper.schema_json)
 
@@ -195,7 +190,6 @@ def run_import(user, file_storage, institution, account, mapper, app_config):
             "parse_errors": [],
     }
 
-    # If an Import with same sha+account already exists, REUSE it
     existing = Import.query.filter_by(original_sha256=sha, account_id=account.id).first()
     if existing:
         existing.mapper_id = mapper.id
@@ -208,7 +202,6 @@ def run_import(user, file_storage, institution, account, mapper, app_config):
         db.session.commit()
         return existing, raw, review
 
-    # Otherwise create a fresh Import row with the correct sha
     imp = Import(
         institution_id=institution.id,
         account_id=account.id,

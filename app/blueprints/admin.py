@@ -202,7 +202,7 @@ def category_delete(category_id):
 
 @bp.route("/rules", methods=["GET", "POST"])
 def rules():
-    """Route for listing and creating rules."""
+    """Route for listing, creating, and exporting rules."""
     form = RuleForm()
     form.category_id.choices = [
         (c.id, f"{c.name} / {c.group}") for c in Category.query.order_by(Category.name, Category.group).all()
@@ -221,8 +221,24 @@ def rules():
 
     all_rules = Rule.query.order_by(Rule.keyword).all()
     csrf_form = CSRFOnlyForm()
-    return render_template("admin/rules.html", form=form, rules=all_rules, csrf_form=csrf_form)
 
+    # Generate the JSON string for export
+    rules_export_dict = {}
+    for rule in all_rules:
+        category_name = rule.category.name
+        if category_name not in rules_export_dict:
+            rules_export_dict[category_name] = []
+        rules_export_dict[category_name].append(rule.keyword)
+
+    rules_json_string = f"DEFAULT_RULES_JSON='{json.dumps(rules_export_dict)}'"
+
+    return render_template(
+        "admin/rules.html",
+        form=form,
+        rules=all_rules,
+        csrf_form=csrf_form,
+        rules_json_string=rules_json_string  # Pass the string to the template
+    )
 
 @bp.route("/rule/<int:rule_id>/edit", methods=["GET", "POST"])
 def rule_edit(rule_id):

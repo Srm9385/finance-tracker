@@ -1,10 +1,13 @@
 # srm9385/finance-tracker/finance-tracker-b6479a0b9b4b550a18703e80c76c724f6985583c/app/blueprints/ai.py
+from datetime import timedelta
+
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify
 from ..extensions import db
 from ..models import Transaction, Category, Rule, Institution, Account, TransferKeyword, \
     RefundKeyword  # <-- Import Rule
 from ..services.ai_categorizer import get_category_suggestions, is_ai_configured
-from ..forms import CSRFOnlyForm, AICategorizeForm
+from ..forms import AICategorizeForm, RefundFinderForm,CSRFOnlyForm
+from sqlalchemy import or_
 
 bp = Blueprint("ai", __name__, url_prefix="/ai")
 
@@ -192,4 +195,106 @@ def apply_suggestions():
     if flash_messages:
         flash(" ".join(flash_messages), "success")
 
+    return redirect(url_for('dashboard.index'))
+
+
+@bp.route("/refund-finder", methods=["GET", "POST"])
+def refund_finder():
+    form = RefundFinderForm()
+    form.account_id.choices = [(a.id, f"{a.institution.name} - {a.name}") for a in
+                               Account.query.order_by(Account.institution_id, Account.name).all()]
+
+    if form.validate_on_submit():
+        account_id = form.account_id.data
+
+        # Find potential refund pairs
+        positive_txns = Transaction.query.filter(
+            Transaction.account_id == account_id,
+            Transaction.amount_cents > 0,
+            Transaction.is_refund == False,
+            Transaction.is_transfer == False
+        ).order_by(Transaction.txn_date.desc()).all()
+
+        refund_pairs = []
+        for pos_t in positive_txns:
+            # Look for a matching negative transaction within a 60-day window
+            time_window = pos_t.txn_date - timedelta(days=60)
+
+            neg_t = Transaction.query.filter(
+                Transaction.account_id == account_id,
+                Transaction.amount_cents == -pos_t.amount_cents,
+                Transaction.txn_date >= time_window,
+                Transaction.txn_date <= pos_t.txn_date,
+                Transaction.is_refund == False,
+                Transaction.is_transfer == False
+            ).first()
+
+            if neg_t:
+                refund_pairs.append({
+                    "refund_id": pos_t.id,
+                    "original_id": neg_t.id
+                })
+
+        if not refund_pairs:
+            flash("No potential refund pairs found in this account.", "info")
+            return redirect(url_for('.refund_finder'))
+
+        session['refund_pairs'] = refund_pairs
+        return redirect(url_for('.review_refunds'))
+
+    return render_template("ai/refund_finder.html", form=form)
+
+
+@bp.route("/review-refunds")
+def review_refunds():
+    pairs = session.get('refund_pairs', [])
+    if not pairs:
+        return redirect(url_for('.refund_finder'))
+
+    all_ids = [p['refund_id'] for p in pairs] + [p['original_id'] for p in pairs]
+    transactions = {t.id: t for t in Transaction.query.filter(Transaction.id.in_(all_ids)).all()}
+
+    form = CSRFOnlyForm()
+    return render_template(
+        "ai/review_refunds.html",
+        pairs=pairs,
+        transactions=transactions,
+        form=form
+    )
+
+
+@bp.route("/apply-refunds", methods=["POST"])
+def apply_refunds():
+    approved_pairs = request.form.getlist("approve")  # List of "original_id:refund_id"
+
+    if not approved_pairs:
+        flash("No refunds were approved.", "info")
+        return redirect(url_for('.categorize'))
+
+    refund_category = Category.query.filter_by(name="Refund").first()
+    if not refund_category:
+        flash("A 'Refund' category must exist to apply this action. Please create one in the admin panel.", "error")
+        return redirect(url_for('.review_refunds'))
+
+    count = 0
+    for pair_str in approved_pairs:
+        try:
+            original_id, refund_id = map(int, pair_str.split(':'))
+
+            # Update both transactions
+            Transaction.query.filter(
+                or_(Transaction.id == original_id, Transaction.id == refund_id)
+            ).update({
+                'is_refund': True,
+                'category_id': refund_category.id
+            })
+            count += 2  # two transactions updated per pair
+        except (ValueError, IndexError):
+            flash(f"Skipping invalid pair data: {pair_str}", "warning")
+            continue
+
+    db.session.commit()
+    session.pop('refund_pairs', None)
+
+    flash(f"Successfully marked {count} transactions as refunds and updated their category.", "success")
     return redirect(url_for('dashboard.index'))

@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Review Potential Refunds</h2>
+<p>Review the pairs below. Check the box to mark both transactions as refunds and assign them to the 'Refund' category.</p>
+
+<form method="post" action="{{ url_for('ai.apply_refunds') }}">
+  {{ form.hidden_tag() }}
+  <table>
+    <thead>
+      <tr>
+        <th><input type="checkbox" id="select-all" checked></th>
+        <th>Original Transaction (Debit)</th>
+        <th>Potential Refund (Credit)</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for pair in pairs %}
+      {% set original = transactions.get(pair.original_id) %}
+      {% set refund = transactions.get(pair.refund_id) %}
+      {% if original and refund %}
+      <tr>
+        <td><input type="checkbox" name="approve" value="{{ original.id }}:{{ refund.id }}" checked class="approve-cb"></td>
+        <td>{{ original.txn_date.strftime('%Y-%m-%d') }} | {{ original.description_raw }} | <span class="mono">{{ "%.2f"|format(original.amount_cents/100) }}</span></td>
+        <td>{{ refund.txn_date.strftime('%Y-%m-%d') }} | {{ refund.description_raw }} | <span class="mono">{{ "%.2f"|format(refund.amount_cents/100) }}</span></td>
+      </tr>
+      {% endif %}
+    {% else %}
+      <tr><td colspan="3" class="muted">No refund pairs found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <button type="submit" class="contrast">Apply Approved Refunds</button>
+  <a href="{{ url_for('ai.categorize') }}" role="button" class="secondary">Cancel</a>
+</form>
+
+<script>
+  // Simple script to toggle all checkboxes
+  document.getElementById('select-all').addEventListener('change', function(e) {
+    document.querySelectorAll('.approve-cb').forEach(function(checkbox) {
+      checkbox.checked = e.target.checked;
+    });
+  });
+</script>
+{% endblock %}

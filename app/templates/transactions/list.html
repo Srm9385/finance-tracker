@@ -23,18 +23,14 @@
 
     const categoryLookup = {};
     categories.forEach(cat => {
-      // --- START MODIFICATION ---
       categoryLookup[cat.id] = `${cat.name} / ${cat.group}`;
-      // --- END MODIFICATION ---
     });
 
     const categoryEditorParams = {
         values: {"": "-- None --"}
     };
     categories.forEach(cat => {
-        // --- START MODIFICATION ---
         categoryEditorParams.values[cat.id] = `${cat.name} / ${cat.group}`;
-        // --- END MODIFICATION ---
     });
 
     const categoryFormatter = function(cell, formatterParams, onRendered) {
@@ -46,29 +42,37 @@
         return (cell.getValue() / 100.0).toFixed(2);
     };
 
- const actionsFormatter = function(cell, formatterParams, onRendered) {
+    const actionsFormatter = function(cell, formatterParams, onRendered) {
         const t = cell.getRow().getData();
-        const deleteUrl = `{{ url_for('transactions.delete_single', txn_id=0) }}`.replace('0', t.id);
-        const transferUrl = `{{ url_for('transactions.toggle_transfer', txn_id=0) }}`.replace('0', t.id);
-        const refundUrl = `{{ url_for('transactions.toggle_refund', txn_id=0) }}`.replace('0', t.id);
         const transferText = t.is_transfer ? 'Unmark Transfer' : 'Mark as Transfer';
         const refundText = t.is_refund ? 'Unmark Refund' : 'Mark as Refund';
-        const csrfToken = "{{ csrf_token() }}";
 
-        return `
-            <form method="post" action="${deleteUrl}" onsubmit="return confirm('Delete this transaction?');" style="display: inline-block;">
-                <input type="hidden" name="csrf_token" value="${csrfToken}">
-                <button type="submit" class="secondary outline" style="padding: 5px 10px; font-size: 0.8em;">Delete</button>
-            </form>
-            <form method="post" action="${transferUrl}" style="display: inline-block;">
-                <input type="hidden" name="csrf_token" value="${csrfToken}">
-                <button type="submit" class="secondary outline" style="padding: 5px 10px; font-size: 0.8em;">${transferText}</button>
-            </form>
-            <form method="post" action="${refundUrl}" style="display: inline-block;">
-                <input type="hidden" name="csrf_token" value="${csrfToken}">
-                <button type="submit" class="secondary outline" style="padding: 5px 10px; font-size: 0.8em;">${refundText}</button>
-            </form>
+        const container = document.createElement("div");
+
+        const deleteForm = document.createElement('form');
+        deleteForm.method = 'post';
+        deleteForm.action = `{{ url_for('transactions.delete_single', txn_id=0) }}`.replace('0', t.id);
+        deleteForm.style.display = 'inline-block';
+        deleteForm.onsubmit = () => confirm('Delete this transaction?');
+        deleteForm.innerHTML = `
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="secondary outline" style="padding: 5px 10px; font-size: 0.8em;">Delete</button>
         `;
+        container.appendChild(deleteForm);
+
+        const createAsyncButton = (text, action) => {
+            const button = document.createElement('button');
+            button.innerText = text;
+            button.className = 'secondary outline';
+            button.style.cssText = 'padding: 5px 10px; font-size: 0.8em; margin-left: 0.5rem;';
+            button.dataset.action = action;
+            return button;
+        };
+
+        container.appendChild(createAsyncButton(transferText, 'toggle_transfer'));
+        container.appendChild(createAsyncButton(refundText, 'toggle_refund'));
+
+        return container;
     };
 
     const table = new Tabulator("#transaction-table", {
@@ -88,7 +92,49 @@
             }
             return `<span class="muted">Manual</span>`;
         }},
-        {title: "Actions", formatter: actionsFormatter, hozAlign: "center", headerSort: false, resizable: false, width: 250},
+        {title: "Actions", formatter: actionsFormatter, hozAlign: "center", headerSort: false, resizable: false, width: 280,
+         cellClick: function(e, cell) {
+            const target = e.target;
+            if (target.tagName === 'BUTTON' && target.dataset.action) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const action = target.dataset.action;
+                const row = cell.getRow();
+                const rowData = row.getData();
+
+                const url = `/transactions/${action}/${rowData.id}`;
+
+                const csrfToken = "{{ csrf_token() }}";
+
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+
+                fetch(url, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // --- START MODIFICATION ---
+                        // Update the row data and then re-run the formatters for that row
+                        row.update(data)
+                           .then(() => {
+                               row.reformat();
+                           });
+                        // --- END MODIFICATION ---
+                    } else {
+                        alert(`Error: ${data.message || 'Could not update transaction.'}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An unexpected error occurred.');
+                });
+            }
+         }
+        },
       ],
       resizableColumnFit: true,
     });

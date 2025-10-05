@@ -101,3 +101,8 @@ class RestoreForm(FlaskForm):
     # --- START MODIFICATION ---
     backup_file = FileField("Backup Archive (.tar.gz)", validators=[DataRequired()])    # --- END MODIFICATION ---
     submit = SubmitField("Restore from Backup")
+
+class RefundFinderForm(FlaskForm):
+    """Form for finding potential refunds in an account."""
+    account_id = SelectField("Account", coerce=int, validators=[DataRequired()])
+    submit = SubmitField("Find Refunds")

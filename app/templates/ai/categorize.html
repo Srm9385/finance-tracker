@@ -9,7 +9,13 @@
   </article>
 {% else %}
    <p>Run the AI assistant to get category suggestions for your transactions. This can take a few moments.</p>
+
+   <a href="{{ url_for('ai.refund_finder') }}" role="button" class="secondary outline" style="margin-bottom: 1rem;">
+    <i class="fas fa-undo"></i> Find Potential Refunds
+   </a>
+
   <form method="post">
+    {{ form.hidden_tag() }}  <form method="post">
     {{ form.hidden_tag() }}
 
     <div class="grid">

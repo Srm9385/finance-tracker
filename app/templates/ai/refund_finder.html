@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Refund Finder</h2>
+<p>Select an account to scan for potential refund pairs (a positive transaction matching a prior negative one).</p>
+
+<article>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <div class="grid">
+      <label>
+        {{ form.account_id.label }}
+        {{ form.account_id() }}
+        {% for e in form.account_id.errors %}<small class="muted">{{ e }}</small>{% endfor %}
+      </label>
+    </div>
+    {{ form.submit(class="contrast") }}
+  </form>
+</article>
+{% endblock %}

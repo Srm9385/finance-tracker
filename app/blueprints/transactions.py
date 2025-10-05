@@ -1,5 +1,5 @@
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from sqlalchemy import desc
 from ..extensions import db
 from ..models import Account, Transaction, Category
@@ -35,9 +35,9 @@ def list_for_account(account_id):
             "category_id": t.category_id,
             "import_id": t.import_id,
             "is_transfer": t.is_transfer,
+            "is_refund": t.is_refund,
         })
 
-    # --- START MODIFICATION ---
     # Sort by name first, then group for a more intuitive dropdown
     all_categories = Category.query.order_by(Category.name, Category.group).all()
     # --- END MODIFICATION ---
@@ -116,22 +116,21 @@ def add_manual(account_id):
 
 @bp.route("/toggle_transfer/<int:txn_id>", methods=["POST"])
 def toggle_transfer(txn_id):
-    t = Transaction.query.get_or_404(txn_id)
-    t.is_transfer = not t.is_transfer
-    db.session.commit()
+    form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        t = Transaction.query.get_or_404(txn_id)
+        t.is_transfer = not t.is_transfer
+        db.session.commit()
+        return jsonify({'is_transfer': t.is_transfer, 'status': 'success'})
+    return jsonify({'status': 'error', 'message': 'CSRF validation failed.'}), 400
 
-    status = "marked as transfer" if t.is_transfer else "unmarked as transfer"
-    flash(f"Transaction '{t.description_raw}' was {status}.", "success")
-
-    return redirect(_back_to_account(t.account_id))
 
 @bp.route("/toggle_refund/<int:txn_id>", methods=["POST"])
 def toggle_refund(txn_id):
-    t = Transaction.query.get_or_404(txn_id)
-    t.is_refund = not t.is_refund
-    db.session.commit()
-
-    status = "marked as refund" if t.is_refund else "unmarked as refund"
-    flash(f"Transaction '{t.description_raw}' was {status}.", "success")
-
-    return redirect(_back_to_account(t.account_id))
+    form = CSRFOnlyForm()
+    if form.validate_on_submit():
+        t = Transaction.query.get_or_404(txn_id)
+        t.is_refund = not t.is_refund
+        db.session.commit()
+        return jsonify({'is_refund': t.is_refund, 'status': 'success'})
+    return jsonify({'status': 'error', 'message': 'CSRF validation failed.'}), 400

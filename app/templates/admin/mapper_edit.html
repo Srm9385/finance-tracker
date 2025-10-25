@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Mapping Wizard: {{ institution.name }} &rarr; {{ account.name }}</h2>
+<p class="muted">
+  Configure how to read your CSV file. The settings you save here will become a new, versioned mapper for this account.
+</p>
+
+<div class="grid">
+  <article>
+    <header><strong>Detected CSV Headers</strong></header>
+    <p>
+      {% for h in headers %}
+        <kbd>{{ h }}</kbd>&nbsp;
+      {% else %}
+        <span class="muted">No headers found in cache.</span>
+      {% endfor %}
+    </p>
+  </article>
+</div>
+
+
+<form method="post">
+  {{ form.hidden_tag() }}
+
+  <div class="grid">
+    <!-- Column Mapping -->
+    <fieldset>
+      <legend>Column Mapping</legend>
+      <div class="grid">
+        <label>{{ form.date_col.label }} {{ form.date_col() }}</label>
+        <label>{{ form.desc_col.label }} {{ form.desc_col() }}</label>
+      </div>
+      <label>{{ form.indicator_col.label }}
+        {{ form.indicator_col() }}
+        <small class="muted">Optional. Use if a column specifies 'Credit' vs 'Debit'.</small>
+      </label>
+      <hr>
+      <label>{{ form.amount_col.label }}
+        {{ form.amount_col() }}
+        <small class="muted">Use for a single, signed amount column (e.g., -50.25).</small>
+      </label>
+      <p><strong>OR</strong> if you have separate debit/credit columns:</p>
+      <div class="grid">
+          <label>{{ form.debit_col.label }} {{ form.debit_col() }}</label>
+          <label>{{ form.credit_col.label }} {{ form.credit_col() }}</label>
+      </div>
+      <hr>
+       <label>{{ form.balance_col.label }}
+        {{ form.balance_col() }}
+        <small class="muted">Optional. The running balance after the transaction.</small>
+      </label>
+    </fieldset>
+
+    <!-- Format & Options -->
+    <fieldset>
+      <legend>Formatting & Options</legend>
+      <label>{{ form.date_fmt.label }}
+        {{ form.date_fmt() }}
+        <small class="muted">Example: <code>%m/%d/%Y</code> for "09/28/2025".</small>
+      </label>
+      <label>
+        {{ form.exclude_pending() }} {{ form.exclude_pending.label }}
+      </label>
+    </fieldset>
+  </div>
+
+
+  <!-- Preview Section -->
+  {% if preview_rows %}
+  <article>
+    <header><strong>Validation Preview</strong> (first 5 rows)</header>
+    <table>
+      <thead>
+        <tr>
+          <th>Parsed Date</th>
+          <th>Raw Description</th>
+          <th>Amount (Cents)</th>
+          <th>Balance (Cents)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in preview_rows %}
+          <tr>
+            <td>
+              {% if row.txn_date %}
+                {{ row.txn_date.strftime('%Y-%m-%d') }}
+              {% else %}
+                <span style="color: red;">Parse Error</span>
+              {% endif %}
+            </td>
+            <td>{{ row.description_raw }}</td>
+            <td class="mono">{{ row.amount_cents }}</td>
+            <td class="mono">{{ row.running_balance_cents if row.running_balance_cents is not none else '–' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </article>
+  {% endif %}
+
+
+  <!-- Actions -->
+  <footer>
+    <div class="grid">
+        <button type="submit" name="action" value="test" class="secondary">Test Mapping</button>
+        <button type="submit" name="action" value="save_and_import" class="contrast">Save Mapping & Import</button>
+    </div>
+  </footer>
+
+</form>
+{% endblock %}

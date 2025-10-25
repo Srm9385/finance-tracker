@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Import CSV</h2>
+<form method="post" enctype="multipart/form-data">
+  {{ form.hidden_tag() }}
+  <div>{{ form.institution_id.label }} {{ form.institution_id() }}</div>
+  <div>{{ form.account_id.label }} {{ form.account_id() }}</div>
+  <div>{{ form.mapper_id.label }} {{ form.mapper_id() }}
+  <small class="muted">Leave on “Guess from CSV (no mapping)” to auto-detect columns and confirm in the wizard.</small>
+</div>
+  <div>{{ form.file.label }} {{ form.file() }}</div>
+  <div>{{ form.submit(class="contrast") }}</div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const institutionSelect = document.getElementById('institution_id');
+    const accountSelect = document.getElementById('account_id');
+    const mapperSelect = document.getElementById('mapper_id');
+
+    const updateAccountOptions = async (institutionId) => {
+        // Clear current options
+        accountSelect.innerHTML = '';
+        mapperSelect.innerHTML = '<option value="-1">Guess from CSV (no mapping)</option>';
+
+        if (!institutionId) return;
+
+        try {
+            const response = await fetch(`/imports/accounts-for-institution/${institutionId}`);
+            const accounts = await response.json();
+
+            if (accounts.length > 0) {
+                accounts.forEach(account => {
+                    const option = new Option(account.name, account.id);
+                    accountSelect.add(option);
+                });
+                // Trigger an update for the mapper dropdown based on the first account
+                updateMapperOptions(accounts[0]);
+            }
+        } catch (error) {
+            console.error('Error fetching accounts:', error);
+        }
+    };
+
+    const updateMapperOptions = (selectedAccount) => {
+        mapperSelect.innerHTML = '<option value="-1">Guess from CSV (no mapping)</option>';
+        if (selectedAccount && selectedAccount.mappers) {
+            selectedAccount.mappers.forEach(mapper => {
+                const option = new Option(mapper.name, mapper.id);
+                mapperSelect.add(option);
+            });
+        }
+    };
+
+    institutionSelect.addEventListener('change', (e) => {
+        updateAccountOptions(e.target.value);
+    });
+
+    accountSelect.addEventListener('change', async (e) => {
+        const institutionId = institutionSelect.value;
+        const accountId = e.target.value;
+        try {
+            const response = await fetch(`/imports/accounts-for-institution/${institutionId}`);
+            const accounts = await response.json();
+            const selectedAccount = accounts.find(acc => acc.id == accountId);
+            updateMapperOptions(selectedAccount);
+        } catch (error) {
+            console.error('Error fetching mappers:', error);
+        }
+    });
+
+    // Initial load
+    if (institutionSelect.value) {
+        updateAccountOptions(institutionSelect.value);
+    }
+});
+</script>
+{% endblock %}

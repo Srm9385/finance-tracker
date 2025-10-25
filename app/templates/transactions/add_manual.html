@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Add Manual Transaction</h2>
+<p>
+  <strong>Account:</strong> {{ account.institution.name }} — {{ account.name }}
+</p>
+
+<form method="post">
+  {{ form.hidden_tag() }}
+
+  <label for="txn_date">
+    {{ form.txn_date.label }}
+    {{ form.txn_date(class="input") }}
+    {% for e in form.txn_date.errors %}<small class="muted">{{ e }}</small>{% endfor %}
+  </label>
+
+  <label for="description_raw">
+    {{ form.description_raw.label }}
+    {{ form.description_raw(class="input") }}
+    {% for e in form.description_raw.errors %}<small class="muted">{{ e }}</small>{% endfor %}
+  </label>
+
+  <label for="amount">
+    {{ form.amount.label }}
+    {{ form.amount(class="input", placeholder="e.g., -50.25 or 120.00") }}
+    <small class="muted">Use a negative value for an expense/debit and a positive value for income/credit.</small>
+    {% for e in form.amount.errors %}<small class="muted">{{ e }}</small>{% endfor %}
+  </label>
+
+  <div class="grid">
+    {{ form.submit(class="contrast") }}
+    <a href="{{ url_for('transactions.list_for_account', account_id=account.id) }}" role="button" class="secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

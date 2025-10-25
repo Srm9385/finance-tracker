@@ -1,0 +1,552 @@
+{% extends 'base.html' %}
+
+{# Add a style block for the new checkbox containers #}
+{% block styles %}
+<style>
+  .checkbox-container {
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid var(--pico-form-element-border-color);
+    padding: 0.5rem;
+    border-radius: var(--pico-border-radius);
+  }
+  .checkbox-container label {
+    display: block;
+    margin-bottom: 0.5rem;
+  }
+</style>
+{% endblock %}
+
+
+{% block content %}
+<h2>Dashboard</h2>
+<h3>Accounts</h3>
+<table>
+  <thead><tr><th>Institution</th><th>Account</th><th>Type</th><th class="mono">Balance</th></tr></thead>
+  <tbody>
+    {% for row in balances %}
+    <tr>
+      <td>{{ row.account.institution.name }}</td>
+        <td>
+          <a href="{{ url_for('transactions.list_for_account', account_id=row.account.id) }}">
+            {{ row.account.name }}
+          </a>
+        </td>
+    <td>{{ row.account.type }}</td>
+      <td class="mono">{{ "%.2f"|format(row.balance) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<hr>
+<h3>Income Over Time</h3>
+<article>
+    <div class="grid">
+        <div>
+          <label for="income_start_date">Start Date</label>
+          <input type="date" id="income_start_date" name="income_start_date">
+        </div>
+        <div>
+          <label for="income_end_date">End Date</label>
+          <input type="date" id="income_end_date" name="income_end_date">
+        </div>
+        <div>
+          <label for="income_account_filter">Filter by Account</label>
+          <select id="income_account_filter" name="income_account_filter">
+            <option value="">All Accounts</option>
+            {% for account_name in filter_options.accounts %}
+                <option value="{{ account_name }}">{{ account_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+    </div>
+  <canvas id="incomeChart"></canvas>
+</article>
+
+<hr>
+<h3>Income vs. Spending</h3>
+<article>
+    <div class="grid">
+        <div>
+          <label for="ivs_start_date">Start Date</label>
+          <input type="date" id="ivs_start_date" name="ivs_start_date">
+        </div>
+        <div>
+          <label for="ivs_end_date">End Date</label>
+          <input type="date" id="ivs_end_date" name="ivs_end_date">
+        </div>
+    </div>
+    <div class="grid">
+        <div>
+            <label for="ivs_account_filter">Filter by Account</label>
+            {# --- START MODIFICATION --- #}
+            <div id="ivs_account_filter" class="checkbox-container">
+                {% for account_name in filter_options.accounts %}
+                    <label>
+                        <input type="checkbox" name="ivs_account_filter" value="{{ account_name }}"> {{ account_name }}
+                    </label>
+                {% endfor %}
+            </div>
+            {# --- END MODIFICATION --- #}
+        </div>
+        <div>
+            <label for="ivs_category_filter">Filter by Category</label>
+            {# --- START MODIFICATION --- #}
+            <div id="ivs_category_filter" class="checkbox-container">
+                {% for category_name in filter_options.categories %}
+                    <label>
+                        <input type="checkbox" name="ivs_category_filter" value="{{ category_name }}"> {{ category_name }}
+                    </label>
+                {% endfor %}
+            </div>
+            {# --- END MODIFICATION --- #}
+        </div>
+        <div>
+            <label>Joint Filter</label>
+            <div class="checkbox-container">
+                <label>
+                    <input type="checkbox" id="ivs_joint_only" name="ivs_joint_only"> Joint only
+                </label>
+            </div>
+        </div>
+    </div>
+  <canvas id="incomeVsSpendingChart"></canvas>
+</article>
+
+<hr>
+<h3>Spending Analysis</h3>
+<article>
+  <div class="grid">
+    <div>
+      <label for="start_date">Start Date</label>
+      <input type="date" id="start_date" name="start_date">
+    </div>
+    <div>
+      <label for="end_date">End Date</label>
+      <input type="date" id="end_date" name="end_date">
+    </div>
+    <div>
+      <label for="group_by">Group By</label>
+      <select id="group_by" name="group_by">
+        <option value="category">Category</option>
+        <option value="group">Category Group</option>
+        <option value="account">Account</option>
+      </select>
+    </div>
+    <div>
+      <label>
+        <input type="checkbox" id="bar_joint_only" name="bar_joint_only"> Joint only
+      </label>
+    </div>
+  </div>
+  <canvas id="spendingChart"></canvas>
+</article>
+
+<hr>
+<h3>Spending Over Time</h3>
+<article>
+    <div class="grid">
+        <div>
+            <label for="line_start_date">Start Date</label>
+            <input type="date" id="line_start_date" name="line_start_date">
+        </div>
+        <div>
+            <label for="line_end_date">End Date</label>
+            <input type="date" id="line_end_date" name="line_end_date">
+        </div>
+        <div>
+            <label for="line_granularity">Granularity</label>
+            <select id="line_granularity" name="line_granularity">
+                <option value="day">Daily</option>
+                <option value="week">Weekly</option>
+                <option value="month">Monthly</option>
+            </select>
+        </div>
+    </div>
+    <div class="grid">
+        <div>
+            <label for="filter_type">Filter By</label>
+            <select id="filter_type" name="filter_type">
+                <option value="">None</option>
+                <option value="category">Category</option>
+                <option value="group">Category Group</option>
+                <option value="account">Account</option>
+            </select>
+        </div>
+        <div>
+            <label for="filter_value">Value</label>
+            <select id="filter_value" name="filter_value" disabled>
+                <option value="">-- Select Filter First --</option>
+            </select>
+        </div>
+        <div>
+            <label>
+                <input type="checkbox" id="line_joint_only" name="line_joint_only"> Joint only
+            </label>
+        </div>
+    </div>
+    <canvas id="timeSeriesChart"></canvas>
+</article>
+
+<h3>Month-to-date Spend</h3>
+<p class="mono">${{ "%.2f"|format(mtd|abs) }}</p>
+<details>
+  <summary>View Transactions Contributing to Monthly Spend</summary>
+  <article>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Account</th>
+          <th>Description</th>
+          <th class="mono">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for t in mtd_transactions %}
+        <tr>
+          <td>{{ t.txn_date.strftime('%Y-%m-%d') }}</td>
+          <td>{{ t.account.name }}</td> {# Assumes relationship is loaded #}
+          <td>{{ t.description_raw }}</td>
+          <td class="mono">{{ "%.2f"|format(t.amount_cents/100) }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4" class="muted">No spending transactions this month.</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </article>
+</details>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  // --- Income Chart Logic ---
+  const incomeCtx = document.getElementById('incomeChart').getContext('2d');
+  let incomeChart;
+
+  const fetchDataAndUpdateIncomeChart = async () => {
+    const accountName = document.getElementById('income_account_filter').value;
+    const startDate = document.getElementById('income_start_date').value;
+    const endDate = document.getElementById('income_end_date').value;
+
+    const url = new URL("{{ url_for('dashboard.income_over_time') }}", window.location.origin);
+    if (accountName) url.searchParams.append('account_name', accountName);
+    if (startDate) url.searchParams.append('start_date', startDate);
+    if (endDate) url.searchParams.append('end_date', endDate);
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (incomeChart) {
+        incomeChart.data.labels = data.labels;
+        incomeChart.data.datasets[0].data = data.data;
+        incomeChart.update();
+      } else {
+        incomeChart = new Chart(incomeCtx, {
+          type: 'bar',
+          data: {
+            labels: data.labels,
+            datasets: [{
+              label: 'Monthly Income',
+              data: data.data,
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              borderColor: 'rgba(75, 192, 192, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            scales: {
+              y: { beginAtZero: true }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching income chart data:', error);
+    }
+  };
+
+  const todayIncome = new Date();
+  const oneYearAgoIncome = new Date(new Date().setFullYear(todayIncome.getFullYear() - 1));
+  document.getElementById('income_end_date').value = todayIncome.toISOString().split('T')[0];
+  document.getElementById('income_start_date').value = oneYearAgoIncome.toISOString().split('T')[0];
+
+  document.getElementById('income_account_filter').addEventListener('change', fetchDataAndUpdateIncomeChart);
+  document.getElementById('income_start_date').addEventListener('change', fetchDataAndUpdateIncomeChart);
+  document.getElementById('income_end_date').addEventListener('change', fetchDataAndUpdateIncomeChart);
+  fetchDataAndUpdateIncomeChart();
+
+  // --- Income vs Spending Chart Logic ---
+  const ivsCtx = document.getElementById('incomeVsSpendingChart').getContext('2d');
+  let incomeVsSpendingChart;
+
+  const fetchDataAndUpdateIvsChart = async () => {
+    const startDate = document.getElementById('ivs_start_date').value;
+    const endDate = document.getElementById('ivs_end_date').value;
+
+    // --- START MODIFICATION ---
+    const selectedAccounts = Array.from(document.querySelectorAll('#ivs_account_filter input[type="checkbox"]:checked')).map(cb => cb.value);
+    const selectedCategories = Array.from(document.querySelectorAll('#ivs_category_filter input[type="checkbox"]:checked')).map(cb => cb.value);
+    const jointOnly = document.getElementById('ivs_joint_only').checked;
+
+    const url = new URL("{{ url_for('dashboard.income_vs_spending') }}", window.location.origin);
+    if (startDate) url.searchParams.append('start_date', startDate);
+    if (endDate) url.searchParams.append('end_date', endDate);
+
+    selectedAccounts.forEach(acc => url.searchParams.append('account_name', acc));
+    selectedCategories.forEach(cat => url.searchParams.append('category_name', cat));
+    if (jointOnly) url.searchParams.append('joint_only', 'true');
+    // --- END MODIFICATION ---
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (incomeVsSpendingChart) {
+        incomeVsSpendingChart.data.labels = data.labels;
+        incomeVsSpendingChart.data.datasets[0].data = data.income_data;
+        incomeVsSpendingChart.data.datasets[1].data = data.spending_data;
+        incomeVsSpendingChart.update();
+      } else {
+        incomeVsSpendingChart = new Chart(ivsCtx, {
+          type: 'bar',
+          data: {
+            labels: data.labels,
+            datasets: [
+              {
+                label: 'Income',
+                data: data.income_data,
+                backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+              },
+              {
+                label: 'Spending',
+                data: data.spending_data,
+                backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                borderWidth: 1
+              }
+            ]
+          },
+          options: {
+            scales: {
+              y: { beginAtZero: true }
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching income vs spending data:', error);
+    }
+  };
+
+  const todayIvs = new Date();
+  const oneYearAgoIvs = new Date(new Date().setFullYear(todayIvs.getFullYear() - 1));
+  document.getElementById('ivs_end_date').value = todayIvs.toISOString().split('T')[0];
+  document.getElementById('ivs_start_date').value = oneYearAgoIvs.toISOString().split('T')[0];
+
+  // --- START MODIFICATION ---
+  document.getElementById('ivs_start_date').addEventListener('change', fetchDataAndUpdateIvsChart);
+  document.getElementById('ivs_end_date').addEventListener('change', fetchDataAndUpdateIvsChart);
+  document.getElementById('ivs_account_filter').addEventListener('change', fetchDataAndUpdateIvsChart);
+  document.getElementById('ivs_category_filter').addEventListener('change', fetchDataAndUpdateIvsChart);
+  document.getElementById('ivs_joint_only').addEventListener('change', fetchDataAndUpdateIvsChart);
+  // --- END MODIFICATION ---
+
+  fetchDataAndUpdateIvsChart();
+
+
+  // --- Bar Chart Logic (Existing) ---
+  const barCtx = document.getElementById('spendingChart').getContext('2d');
+  let spendingChart;
+
+  const fetchDataAndUpdateBarChart = async () => {
+    const startDate = document.getElementById('start_date').value;
+    const endDate = document.getElementById('end_date').value;
+    const groupBy = document.getElementById('group_by').value;
+    const jointOnly = document.getElementById('bar_joint_only').checked;
+
+    const url = new URL("{{ url_for('dashboard.chart_data') }}", window.location.origin);
+    if (startDate) url.searchParams.append('start_date', startDate);
+    if (endDate) url.searchParams.append('end_date', endDate);
+    url.searchParams.append('group_by', groupBy);
+    if (jointOnly) url.searchParams.append('joint_only', 'true');
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (spendingChart) {
+        spendingChart.data.labels = data.labels;
+        spendingChart.data.datasets[0].data = data.data;
+        spendingChart.update();
+      } else {
+        spendingChart = new Chart(barCtx, {
+          type: 'bar',
+          data: {
+            labels: data.labels,
+            datasets: [{
+              label: 'Total Spending',
+              data: data.data,
+              backgroundColor: 'rgba(75, 192, 192, 0.2)',
+              borderColor: 'rgba(75, 192, 192, 1)',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            scales: {
+              x: { beginAtZero: true }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching bar chart data:', error);
+    }
+  };
+
+  const todayBar = new Date();
+  const thirtyDaysAgoBar = new Date(new Date().setDate(todayBar.getDate() - 30));
+  document.getElementById('end_date').value = todayBar.toISOString().split('T')[0];
+  document.getElementById('start_date').value = thirtyDaysAgoBar.toISOString().split('T')[0];
+
+  document.getElementById('start_date').addEventListener('change', fetchDataAndUpdateBarChart);
+  document.getElementById('end_date').addEventListener('change', fetchDataAndUpdateBarChart);
+  document.getElementById('group_by').addEventListener('change', fetchDataAndUpdateBarChart);
+  document.getElementById('bar_joint_only').addEventListener('change', fetchDataAndUpdateBarChart);
+
+  fetchDataAndUpdateBarChart();
+
+  // --- Line Chart Logic ---
+  const lineCtx = document.getElementById('timeSeriesChart').getContext('2d');
+  let timeSeriesChart;
+  const filterOptions = {{ filter_options | tojson }};
+
+  const filterTypeSelect = document.getElementById('filter_type');
+  const filterValueSelect = document.getElementById('filter_value');
+
+  const updateFilterValueOptions = () => {
+    const selectedType = filterTypeSelect.value;
+    filterValueSelect.innerHTML = '';
+
+    if (selectedType) {
+      filterValueSelect.disabled = false;
+
+      const optionsKey = {
+        'category': 'categories',
+        'group': 'groups',
+        'account': 'accounts'
+      }[selectedType];
+
+      const options = filterOptions[optionsKey];
+
+      const allOption = new Option(`All ${selectedType}s`, '');
+      filterValueSelect.add(allOption);
+
+      if(options){
+        options.forEach(optionValue => {
+            const option = new Option(optionValue, optionValue);
+            filterValueSelect.add(option);
+        });
+      }
+
+    } else {
+      filterValueSelect.disabled = true;
+      const defaultOption = new Option('-- Select Filter First --', '');
+      filterValueSelect.add(defaultOption);
+    }
+  };
+
+  const fetchDataAndUpdateLineChart = async () => {
+    const startDate = document.getElementById('line_start_date').value;
+    const endDate = document.getElementById('line_end_date').value;
+    const granularity = document.getElementById('line_granularity').value;
+    const filterType = filterTypeSelect.value;
+    const filterValue = filterValueSelect.value;
+    const jointOnly = document.getElementById('line_joint_only').checked;
+
+    const url = new URL("{{ url_for('dashboard.spending_over_time') }}", window.location.origin);
+    if (startDate) url.searchParams.append('start_date', startDate);
+    if (endDate) url.searchParams.append('end_date', endDate);
+    url.searchParams.append('granularity', granularity);
+    if (filterType && filterValue) {
+        url.searchParams.append('filter_type', filterType);
+        url.searchParams.append('filter_value', filterValue);
+    }
+    if (jointOnly) {
+        url.searchParams.append('joint_only', 'true');
+    }
+
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (timeSeriesChart) {
+        timeSeriesChart.data.datasets[0].data = data;
+        timeSeriesChart.options.scales.x.time.unit = granularity;
+        timeSeriesChart.update();
+      } else {
+        timeSeriesChart = new Chart(lineCtx, {
+          type: 'line',
+          data: {
+            datasets: [{
+              label: 'Spending',
+              data: data,
+              borderColor: 'rgb(255, 99, 132)',
+              tension: 0.1
+            }]
+          },
+          options: {
+            scales: {
+              x: {
+                type: 'time',
+                time: {
+                  unit: granularity
+                }
+              },
+              y: {
+                beginAtZero: true
+              }
+            }
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching line chart data:', error);
+    }
+  };
+
+  const todayLine = new Date();
+  const ninetyDaysAgoLine = new Date(new Date().setDate(todayLine.getDate() - 90));
+  document.getElementById('line_end_date').value = todayLine.toISOString().split('T')[0];
+  document.getElementById('line_start_date').value = ninetyDaysAgoLine.toISOString().split('T')[0];
+
+  document.getElementById('line_start_date').addEventListener('change', fetchDataAndUpdateLineChart);
+  document.getElementById('line_end_date').addEventListener('change', fetchDataAndUpdateLineChart);
+  document.getElementById('line_granularity').addEventListener('change', fetchDataAndUpdateLineChart);
+  filterTypeSelect.addEventListener('change', () => {
+    updateFilterValueOptions();
+    fetchDataAndUpdateLineChart();
+  });
+  filterValueSelect.addEventListener('change', fetchDataAndUpdateLineChart);
+  document.getElementById('line_joint_only').addEventListener('change', fetchDataAndUpdateLineChart);
+
+  updateFilterValueOptions();
+  fetchDataAndUpdateLineChart();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,173 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>{{ account.institution.name }} — {{ account.name }}</h2>
+
+<div style="margin-bottom: 1rem;">
+  <a href="{{ url_for('transactions.add_manual', account_id=account.id) }}" role="button">Add Manual Transaction</a>
+</div>
+
+<form method="get" class="grid">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search description…">
+  <button class="secondary" type="submit">Search</button>
+</form>
+
+<link href="{{ url_for('static', filename='vendor/tabulator/css/tabulator.min.css') }}" rel="stylesheet">
+<div id="transaction-table" style="margin-top: 1rem;"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const tableData = {{ table_data | tojson }};
+    const categories = {{ categories | tojson }};
+
+    const categoryLookup = {};
+    categories.forEach(cat => {
+      categoryLookup[cat.id] = `${cat.name} / ${cat.group}`;
+    });
+
+    const categoryEditorParams = {
+        values: {"": "-- None --"}
+    };
+    categories.forEach(cat => {
+        categoryEditorParams.values[cat.id] = `${cat.name} / ${cat.group}`;
+    });
+
+    const categoryFormatter = function(cell, formatterParams, onRendered) {
+      const categoryId = cell.getValue();
+      return categoryId ? categoryLookup[categoryId] : "-- None --";
+    };
+
+    const moneyFormatter = function(cell, formatterParams, onRendered) {
+        return (cell.getValue() / 100.0).toFixed(2);
+    };
+
+    const actionsFormatter = function(cell, formatterParams, onRendered) {
+        const t = cell.getRow().getData();
+        const transferText = t.is_transfer ? 'Unmark Transfer' : 'Mark as Transfer';
+        const refundText = t.is_refund ? 'Unmark Refund' : 'Mark as Refund';
+        const jointText = t.is_joint ? 'Unmark Joint' : 'Mark as Joint';
+
+        const container = document.createElement("div");
+
+        const deleteForm = document.createElement('form');
+        deleteForm.method = 'post';
+        deleteForm.action = `{{ url_for('transactions.delete_single', txn_id=0) }}`.replace('0', t.id);
+        deleteForm.style.display = 'inline-block';
+        deleteForm.onsubmit = () => confirm('Delete this transaction?');
+        deleteForm.innerHTML = `
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="secondary outline" style="padding: 5px 10px; font-size: 0.8em;">Delete</button>
+        `;
+        container.appendChild(deleteForm);
+
+        const createAsyncButton = (text, action) => {
+            const button = document.createElement('button');
+            button.innerText = text;
+            button.className = 'secondary outline';
+            button.style.cssText = 'padding: 5px 10px; font-size: 0.8em; margin-left: 0.5rem;';
+            button.dataset.action = action;
+            return button;
+        };
+
+        container.appendChild(createAsyncButton(transferText, 'toggle_transfer'));
+        container.appendChild(createAsyncButton(refundText, 'toggle_refund'));
+        container.appendChild(createAsyncButton(jointText, 'toggle_joint'));
+
+        return container;
+    };
+
+    const table = new Tabulator("#transaction-table", {
+      data: tableData,
+      layout: "fitColumns",
+      tabulatorClass: "tabulator-pico",
+      columns: [
+        {title: "Date", field: "txn_date", sorter: "date", width: 120, headerSort: true, sorterParams:{format:"yyyy-MM-dd"}},
+        {title: "Description", field: "description_raw", headerSort: true, widthGrow: 2},
+        {title: "Amount", field: "amount_cents", sorter: "number", hozAlign: "right", formatter: moneyFormatter, headerSort: true, width: 120},
+        {title: "Category", field: "category_id", formatter: categoryFormatter, headerSort: true, widthGrow: 1.5, editor: "select", editorParams: categoryEditorParams},
+        {title: "Joint", field: "is_joint", hozAlign: "center", headerSort: true, width: 90, formatter: function(cell) {
+            return cell.getValue() ? 'Yes' : 'No';
+        }},
+        {title: "Import", field: "import_id", hozAlign: "center", headerSort: true, width: 100, formatter: function(cell) {
+            const importId = cell.getValue();
+            if (importId) {
+                const url = `{{ url_for('imports.log', import_id=0) }}`.replace('0', importId);
+                return `<a href="${url}">#${importId}</a>`;
+            }
+            return `<span class="muted">Manual</span>`;
+        }},
+        {title: "Actions", formatter: actionsFormatter, hozAlign: "center", headerSort: false, resizable: false, width: 360,
+         cellClick: function(e, cell) {
+            const target = e.target;
+            if (target.tagName === 'BUTTON' && target.dataset.action) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                const action = target.dataset.action;
+                const row = cell.getRow();
+                const rowData = row.getData();
+
+                const url = `/transactions/${action}/${rowData.id}`;
+
+                const csrfToken = "{{ csrf_token() }}";
+
+                const formData = new FormData();
+                formData.append('csrf_token', csrfToken);
+
+                fetch(url, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // --- START MODIFICATION ---
+                        // Update the row data and then re-run the formatters for that row
+                        row.update(data)
+                           .then(() => {
+                               row.reformat();
+                           });
+                        // --- END MODIFICATION ---
+                    } else {
+                        alert(`Error: ${data.message || 'Could not update transaction.'}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An unexpected error occurred.');
+                });
+            }
+         }
+        },
+      ],
+      resizableColumnFit: true,
+    });
+
+    table.on("cellEdited", function(cell){
+        const rowData = cell.getRow().getData();
+        const field = cell.getField();
+
+        if (field === "category_id") {
+            const url = `{{ url_for('transactions.set_category', txn_id=0) }}`.replace('0', rowData.id);
+            const csrfToken = "{{ csrf_token() }}";
+            const newCategoryId = cell.getValue();
+
+            const formData = new FormData();
+            formData.append('csrf_token', csrfToken);
+            formData.append('category_id', newCategoryId);
+
+            fetch(url, {
+                method: 'POST',
+                body: formData
+            }).then(response => {
+                if (!response.ok) {
+                    cell.restoreOldValue();
+                    alert("Error: Could not update category.");
+                }
+            });
+        }
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Manage Rules</h2>
+<p>Rules automatically assign a category if the keyword is found in a transaction's description.</p>
+
+<article>
+  <header><strong>Add New Rule</strong></header>
+  <form method="post">
+    {{ form.hidden_tag() }}
+    <div class="grid">
+      <label>{{ form.keyword.label }} {{ form.keyword() }}</label>
+      <label>{{ form.category_id.label }} {{ form.category_id() }}</label>
+    </div>
+    {{ form.submit(class="contrast") }}
+  </form>
+</article>
+
+<hr/>
+
+<table>
+  <thead>
+    <tr>
+      <th>Keyword</th>
+      <th>Assigned Category</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for rule in rules %}
+    <tr>
+      <td class="mono">{{ rule.keyword }}</td>
+      <td>{{ rule.category.name }} / <strong>{{ rule.category.group }}</strong></td>
+      <td>
+        <a href="{{ url_for('admin.rule_edit', rule_id=rule.id) }}" role="button" class="secondary outline">Edit</a>
+        <form method="post" action="{{ url_for('admin.rule_delete', rule_id=rule.id) }}" style="display: inline-block; margin-left: 0.5rem;" onsubmit="return confirm('Are you sure you want to delete this rule?');">
+          {{ csrf_form.hidden_tag() }}
+          <button type="submit" class="secondary outline">Delete</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr>
+      <td colspan="3" class="muted">No rules created yet.</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<hr/>
+<section id="export-rules">
+    <h3>Export for .env</h3>
+    <p>Copy the line below and add it to your <code>.env</code> file to use these rules for future seeding.</p>
+    <article>
+        <textarea id="rules-json" readonly style="width: 100%; white-space: pre; overflow-x: auto;">{{ rules_json_string }}</textarea>
+        <button id="copy-button" class="outline">Copy to Clipboard</button>
+    </article>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const copyButton = document.getElementById('copy-button');
+    const jsonTextarea = document.getElementById('rules-json');
+
+    if (copyButton && jsonTextarea) {
+        copyButton.addEventListener('click', function() {
+            jsonTextarea.select();
+            document.execCommand('copy');
+
+            const originalText = copyButton.innerText;
+            copyButton.innerText = 'Copied!';
+            setTimeout(() => {
+                copyButton.innerText = originalText;
+            }, 2000);
+        });
+    }
+});
+</script>
+{% endblock %}

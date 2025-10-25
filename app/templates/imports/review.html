@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Review Import ({{ imp.original_filename }})</h2>
+
+<h3>Summary</h3>
+<ul>
+  <li>Total rows parsed: {{ review.row_count }}</li>
+  <li>Exact duplicates found: {{ review.dup_exact|length }}</li>
+  <li>Secondary duplicates (±10d): {{ review.dup_secondary|length }}</li>
+  <li>Transfer candidates (±2d): {{ review.transfer_candidates|length }}</li>
+</ul>
+
+<form method="post">
+  {{ form.hidden_tag() }}
+
+  {# Hidden field that will carry decisions JSON to the server #}
+  {{ form.decisions_json(id="decisions_json") }}
+
+  <h3>Options</h3>
+  <label style="display:block; margin-bottom:0.75rem;">
+    <input type="checkbox" id="revive_deleted">
+    Revive transactions that match previously <em>deleted</em> rows (instead of inserting new copies)
+  </label>
+
+  <h3>Potential Transfers (Confirm to mark)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>New Txn</th>
+        <th>Existing Match</th>
+        <th>Confirm</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for pair in review.transfer_candidates %}
+      <tr>
+        <td>
+          {{ pair.new.txn_date }} |
+          {{ pair.new.description_raw }} |
+          {{ "%.2f"|format(pair.new.amount_cents/100) }}
+        </td>
+        <td>ID {{ pair.existing_id }}</td>
+        <td><input type="checkbox" class="xfer" data-new-index="{{ pair.new_index }}"/></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3" class="muted">No candidates</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+<h3>Exact Duplicates</h3>
+  <p class="muted">Shown for reference; these won’t be inserted.</p>
+  {# You can optionally add a table here to display review.dup_exact if needed #}
+
+  <h3>Secondary Duplicates (±10 days)</h3>
+  <p>These transactions are similar to existing ones. Check the box to import them anyway.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>New Txn (from CSV)</th>
+        <th>Existing Match (in DB)</th>
+        <th>Import Anyway</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for pair in review.dup_secondary %}
+      <tr>
+        <td>
+          {{ pair.new.txn_date }} |
+          {{ pair.new.description_raw }} |
+          {{ "%.2f"|format(pair.new.amount_cents/100) }}
+        </td>
+        <td>ID {{ pair.existing_id }}</td>
+        {# The index here refers to the item's position in the dup_secondary list #}
+        <td><input type="checkbox" class="sec-dup" data-sec-index="{{ loop.index0 }}"/></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3" class="muted">No secondary duplicates found.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {# MODIFICATION END #}
+
+
+  <button class="contrast" type="submit">Commit Import</button>
+
+  <a class="secondary" href="{{ url_for('imports.commit', import_id=imp.id) }}" style="margin-left:1rem;">
+    Commit now (fallback)
+  </a>
+
+  <a class="secondary" href="{{ url_for('imports.log', import_id=imp.id) }}" style="margin-left:1rem;">
+    View Log
+  </a>
+</form>
+
+<script>
+(function(){
+  const form = document.querySelector('form');
+  const decisionsEl = document.getElementById('decisions_json');
+  const reviveEl = document.getElementById('revive_deleted');
+
+  form.addEventListener('submit', function() {
+    // --- For transfers (existing code) ---
+    const accepted_xfers = [];
+    document.querySelectorAll('.xfer:checked').forEach(function(cb) {
+      const idx = parseInt(cb.dataset.newIndex);
+      if (!Number.isNaN(idx)) accepted_xfers.push(idx);
+    });
+
+    // --- NEW: For secondary duplicates ---
+    const accepted_dups = [];
+    document.querySelectorAll('.sec-dup:checked').forEach(function(cb) {
+      const idx = parseInt(cb.dataset.secIndex);
+      if (!Number.isNaN(idx)) accepted_dups.push(idx);
+    });
+    // --- END NEW ---
+
+    const payload = {
+      accepted_transfers: accepted_xfers,
+      // NEW: Add the accepted duplicates to the payload
+      accepted_secondary_duplicates: accepted_dups,
+      revive_deleted: !!(reviveEl && reviveEl.checked)
+    };
+    decisionsEl.value = JSON.stringify(payload);
+  });
+})();
+</script>
+{% endblock %}

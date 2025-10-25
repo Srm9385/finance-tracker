@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Accounts</h2>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div>{{ form.institution_id.label }} {{ form.institution_id() }}</div>
+  <div>{{ form.name.label }} {{ form.name() }}</div>
+  <div>{{ form.type.label }} {{ form.type() }}</div>
+  <div>{{ form.submit(class="contrast") }}</div>
+</form>
+
+<hr/>
+<table>
+  <thead><tr><th>Institution</th><th>Name</th><th>Type</th><th>Mapper</th></tr></thead>
+  <tbody>
+  {% for a in items %}
+    <tr>
+      <td>{{ a.institution.name }}</td>
+      <td>{{ a.name }}</td>
+      <td>{{ a.type }}</td>
+      <td><a href="{{ url_for('admin.mapper_new', institution_id=a.institution_id, account_id=a.id) }}">Add/Update Mapping</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Admin</h2>
+
+<section id="institutions">
+  <h3>Institutions</h3>
+  <form method="post">
+    {{ inst_form.hidden_tag() }}
+    <input type="hidden" name="submitted" value="inst">
+    <div>
+      {{ inst_form.name.label }} {{ inst_form.name() }}
+      {% for e in inst_form.name.errors %}<small class="muted">{{ e }}</small>{% endfor %}
+    </div>
+    <div><button class="contrast" type="submit">Add Institution</button></div>
+  </form>
+
+  <hr/>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Created</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for it in institutions %}
+      <tr>
+        <td>{{ it.name }}</td>
+        <td>
+          {% if it.is_active %}
+            <span style="color: green;">Active</span>
+          {% else %}
+            <span class="muted">Inactive</span>
+          {% endif %}
+        </td>
+        <td class="muted">{{ it.created_at.strftime('%Y-%m-%d') }}</td>
+        <td>
+          <a href="{{ url_for('admin.institution_edit', institution_id=it.id) }}" role="button" class="secondary outline">Edit</a>
+          <form method="post" action="{{ url_for('admin.institution_toggle_active', institution_id=it.id) }}" style="display: inline-block; margin-left: 0.5rem;">
+            {{ csrf_form.hidden_tag() }}
+            <button type="submit" class="secondary outline">
+              {{ 'Deactivate' if it.is_active else 'Activate' }}
+            </button>
+          </form>
+          <form method="post" action="{{ url_for('admin.institution_delete', institution_id=it.id) }}" style="display: inline-block; margin-left: 0.5rem;">
+            {{ csrf_form.hidden_tag() }}
+            <button type="submit" class="secondary outline" onclick="return confirm('Delete institution {{ it.name }} and all associated data?');">
+              Delete
+            </button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<hr/>
+
+<section id="accounts">
+  <h3>Accounts</h3>
+  <form method="post">
+    {{ acct_form.hidden_tag() }}
+    <input type="hidden" name="submitted" value="acct">
+    <div>{{ acct_form.institution_id.label }} {{ acct_form.institution_id() }}</div>
+    <div>{{ acct_form.name.label }} {{ acct_form.name() }}</div>
+    <div>{{ acct_form.type.label }} {{ acct_form.type() }}</div>
+    <div><button class="contrast" type="submit">Add Account</button></div>
+  </form>
+
+  <hr/>
+  <table>
+    <thead>
+      <tr>
+        <th>Institution</th>
+        <th>Account</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Mapper</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for a in accounts %}
+      <tr>
+        <td>{{ a.institution.name }}</td>
+        <td>{{ a.name }}</td>
+        <td>{{ a.type }}</td>
+        <td>
+          {% if a.is_active %}
+            <span style="color: green;">Active</span>
+          {% else %}
+            <span class="muted">Inactive</span>
+          {% endif %}
+        </td>
+        <td><a href="{{ url_for('admin.mapper_edit', institution_id=a.institution_id, account_id=a.id) }}">Edit/Update Mapping</a></td>
+        <td>
+          <a href="{{ url_for('admin.account_edit', account_id=a.id) }}" role="button" class="secondary outline">Edit</a>
+          <form method="post" action="{{ url_for('admin.account_toggle_active', account_id=a.id) }}" style="display: inline-block; margin-left: 0.5rem;">
+            {{ csrf_form.hidden_tag() }}
+            <button type="submit" class="secondary outline">
+              {{ 'Deactivate' if a.is_active else 'Activate' }}
+            </button>
+          </form>
+          <form method="post" action="{{ url_for('admin.account_delete', account_id=a.id) }}" style="display: inline-block; margin-left: 0.5rem;">
+            {{ csrf_form.hidden_tag() }}
+            <button type="submit" class="secondary outline" onclick="return confirm('Delete account {{ a.name }} and all associated data?');">
+              Delete
+            </button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+<hr/>
+<section id="categories">
+    <h3>Categories</h3>
+    <p><a href="{{ url_for('admin.categories') }}" role="button" class="secondary">Manage Categories</a></p>
+</section>
+
+<hr/>
+<section id="rules">
+    <h3>Categorization Rules</h3>
+    <p><a href="{{ url_for('admin.rules') }}" role="button" class="secondary">Manage Rules</a></p>
+</section>
+<hr/>
+<section id="transfer-keywords">
+    <h3>Transfer Keywords</h3>
+    <p><a href="{{ url_for('admin.transfer_keywords') }}" role="button" class="secondary">Manage Transfer Keywords</a></p>
+</section>
+<hr/>
+<section id="refund-keywords">
+    <h3>Refund Keywords</h3>
+    <p><a href="{{ url_for('admin.refund_keywords') }}" role="button" class="secondary">Manage Refund Keywords</a></p>
+</section>
+<hr/>
+<section id="backup">
+    <h3>Backup & Restore</h3>
+    <p><a href="{{ url_for('backup.index') }}" role="button" class="secondary">Go to Backup/Restore</a></p>
+</section>
+{% endblock %}

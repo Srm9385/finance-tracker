@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <title>Finance Tracker</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="icon" href="{{ url_for('static', filename='img/favicon.ico') }}" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/pico/pico.min.css') }}">
+  <style>
+    .muted { color: #6c757d; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+
+    /* Custom Dropdown on Hover */
+    li.dropdown {
+      position: relative;
+    }
+
+    ul.dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      z-index: 1000;
+      background-color: var(--pico-card-background-color);
+      border: var(--pico-border-width) solid var(--pico-dropdown-border-color);
+      border-radius: var(--pico-border-radius);
+      box-shadow: var(--pico-box-shadow);
+      padding: 0.5rem 0;
+      min-width: 12rem; /* Adjust width as needed */
+      list-style: none;
+    }
+
+    li.dropdown:hover > ul.dropdown-menu {
+      display: block;
+    }
+
+    ul.dropdown-menu li {
+      display: block; /* Override nav li's default */
+      margin: 0;
+      padding: 0;
+    }
+
+    ul.dropdown-menu li a {
+      display: block;
+      padding: 0.5rem 1rem;
+      width: 100%;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <nav class="container-fluid">
+    <ul>
+      <li><strong>Finance Tracker</strong></li>
+    </ul>
+    <ul>
+      <li><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+      <li><a href="{{ url_for('imports.upload') }}">Import</a></li>
+      <li><a href="{{ url_for('imports.history') }}">Import History</a></li>
+      {% if g.ai_configured %}
+      <li><a href="{{ url_for('ai.categorize') }}">AI Categorizer</a></li>
+      {% endif %}
+
+      <li class="dropdown">
+        <a href="{{ url_for('admin.index') }}" role="button">Admin</a>
+        <ul class="dropdown-menu">
+            <li><a href="{{ url_for('admin.index') }}">Admin Home</a></li>
+            <li><a href="{{ url_for('admin.categories') }}">Manage Categories</a></li>
+            <li><a href="{{ url_for('admin.rules') }}">Manage Category Classification Rules</a></li>
+            <li><a href="{{ url_for('admin.transfer_keywords') }}">Manage Transfer Classification Rules</a></li>
+            <li><a href="{{ url_for('backup.index') }}">Backup & Restore</a></li>
+        </ul>
+      </li>
+    </ul>
+  </nav>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div>
+          {% for cat, msg in messages %}
+            <article class="{{ 'secondary' if cat=='info' else '' }}"><p>{{ msg }}</p></article>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <script type="text/javascript" src="{{ url_for('static', filename='vendor/luxon/luxon.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='vendor/tabulator/js/tabulator.min.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='vendor/chartjs/chart.js') }}"></script>
+  <script type="text/javascript" src="{{ url_for('static', filename='vendor/chartjs-adapter-luxon/chartjs-adapter-luxon.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

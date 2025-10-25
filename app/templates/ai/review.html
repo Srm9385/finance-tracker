@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Review AI Suggestions</h2>
+<p>Review the suggestions below. Uncheck a box to reveal a dropdown for manual categorization.</p>
+
+<form method="post" action="{{ url_for('ai.apply_suggestions') }}">
+      {{ form.hidden_tag() }}
+  <table>
+    <thead>
+      <tr>
+        <th><input type="checkbox" id="select-all" checked></th>
+        <th>Date</th>
+        <th>Description</th>
+        <th class="mono">Amount</th>
+        <th>Current Category</th>
+        <th>Suggested / Manual Category</th>
+        <th>Reason</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for s in suggestions %}
+      {% set t = transactions.get(s.id) %}
+      {% if t %}
+      <tr data-tid="{{ t.id }}">
+        <td><input type="checkbox" name="approve" value="{{ t.id }}" checked class="approve-cb"></td>
+        <td>{{ t.txn_date.strftime('%Y-%m-%d') }}</td>
+        <td>{{ t.description_raw }}</td>
+        <td class="mono">{{ "%.2f"|format(t.amount_cents/100) }}</td>
+        <td><span class="muted">{{ t.category.name if t.category else 'None' }}</span></td>
+        <td>
+          <strong class="suggested-cat">{{ s.category_name }}</strong>
+          <select name="manual_category_{{ t.id }}" class="manual-cat" style="display: none;">
+            <option value="">-- Select a category --</option>
+            {% for cat in all_categories %}
+              <option value="{{ cat.id }}">{{ cat.name }} / {{ cat.group }}</option>
+              {% endfor %}
+          </select>
+        </td>
+        <td><em>{{ s.reason }}</em></td>
+       <td>
+          <label>
+            {% set checked = namespace(value=false) %}
+            {% for keyword in transfer_keywords %}
+              {# Ensure both sides of the comparison are lowercase #}
+              {% if keyword.lower() in t.description_raw.lower() %}
+                {% set checked.value = true %}
+              {% endif %}
+            {% endfor %}
+            <input type="checkbox" name="mark_as_transfer" value="{{ t.id }}" {% if checked.value %}checked{% endif %}>
+            Mark as Transfer
+          </label>
+          <label>
+            {% set checked = namespace(value=false) %}
+            {% for keyword in refund_keywords %}
+              {# Ensure both sides of the comparison are lowercase #}
+              {% if keyword.lower() in t.description_raw.lower() %}
+                {% set checked.value = true %}
+              {% endif %}
+            {% endfor %}
+            <input type="checkbox" name="mark_as_refund" value="{{ t.id }}" {% if checked.value %}checked{% endif %}>
+            Mark as Refund
+          </label>
+        </td>
+      </tr>
+      {% endif %}
+    {% else %}
+      <tr><td colspan="8" class="muted">No suggestions were returned.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <button type="submit" class="contrast">Apply Approved Suggestions</button>
+  <a href="{{ url_for('ai.categorize') }}" role="button" class="secondary">Cancel</a>
+</form>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('select-all').addEventListener('change', function(e) {
+      document.querySelectorAll('.approve-cb').forEach(function(checkbox) {
+        if (checkbox.checked !== e.target.checked) {
+          checkbox.checked = e.target.checked;
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      });
+    });
+
+    document.querySelectorAll('.approve-cb').forEach(function(checkbox) {
+      checkbox.addEventListener('change', function(e) {
+        const row = e.target.closest('tr');
+        const suggestedEl = row.querySelector('.suggested-cat');
+        const manualEl = row.querySelector('.manual-cat');
+
+        if (e.target.checked) {
+          suggestedEl.style.display = 'inline';
+          manualEl.style.display = 'none';
+          manualEl.value = '';
+        } else {
+          suggestedEl.style.display = 'none';
+          manualEl.style.display = 'inline';
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,89 @@
+{# app/templates/ai/categorize.html #}
+{% extends 'base.html' %}
+{% block content %}
+<h2>AI Category Suggestions</h2>
+{% if not g.ai_configured %}
+  <article>
+    <p><strong>AI Features Not Configured</strong></p>
+    <p class="muted">To enable this feature, set the `OPENAI_API_BASE`, `OPENAI_API_KEY`, and `OPENAI_MODEL_NAME` variables in your <code>.env</code> file.</p>
+  </article>
+{% else %}
+   <p>Run the AI assistant to get category suggestions for your transactions. This can take a few moments.</p>
+
+   <a href="{{ url_for('ai.refund_finder') }}" role="button" class="secondary outline" style="margin-bottom: 1rem;">
+    <i class="fas fa-undo"></i> Find Potential Refunds
+   </a>
+
+  <form method="post">
+    {{ form.hidden_tag() }}  <form method="post">
+    {{ form.hidden_tag() }}
+
+    <div class="grid">
+        <label>{{ form.institution_id.label }} {{ form.institution_id() }}</label>
+        <label>{{ form.account_id.label }} {{ form.account_id() }}</label>
+    </div>
+
+
+    <fieldset>
+      <legend>Select Scope</legend>
+      <label>
+        <input type="radio" name="scope" value="uncategorized" checked>
+        Only uncategorized transactions
+      </label>
+      <label>
+        <input type="radio" name="scope" value="all">
+        All transactions (to get updated suggestions)
+      </label>
+    </fieldset>
+    <button type="submit" class="contrast">Get Suggestions</button>
+  </form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const institutionSelect = document.getElementById('institution_id');
+    const accountSelect = document.getElementById('account_id');
+
+    institutionSelect.addEventListener('change', async function() {
+        const institutionId = this.value;
+
+        // Clear current account options
+        accountSelect.innerHTML = '<option value="">All Accounts</option>';
+
+        if (!institutionId) {
+            return;
+        }
+
+        try {
+            const response = await fetch(`/ai/accounts-for-institution/${institutionId}`);
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            const accounts = await response.json();
+
+            accounts.forEach(account => {
+                const option = new Option(account.name, account.id);
+                accountSelect.add(option);
+            });
+        } catch (error) {
+            console.error('Error fetching accounts:', error);
+        }
+    });
+
+    // If there is a pre-selected institution on page load, trigger the change event to load accounts
+    if (institutionSelect.value) {
+        institutionSelect.dispatchEvent(new Event('change'));
+        // Restore the selected account if it exists in the form data
+        const selectedAccountId = "{{ form.account_id.data or '' }}";
+        if (selectedAccountId) {
+            // A short delay to allow the options to be populated by the fetch request
+            setTimeout(() => {
+                accountSelect.value = selectedAccountId;
+            }, 100);
+        }
+    }
+  });
+</script>
+{% endblock %}

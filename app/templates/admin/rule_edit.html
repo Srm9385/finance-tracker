@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Edit Rule</h2>
+
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="grid">
+    <label>
+      {{ form.keyword.label }}
+      {{ form.keyword() }}
+      {% for e in form.keyword.errors %}<small class="muted">{{ e }}</small>{% endfor %}
+    </label>
+    <label>
+      {{ form.category_id.label }}
+      {{ form.category_id() }}
+      {% for e in form.category_id.errors %}<small class="muted">{{ e }}</small>{% endfor %}
+    </label>
+  </div>
+  <button type="submit" class="contrast">Save Changes</button>
+  <a href="{{ url_for('admin.rules') }}" role="button" class="secondary">Cancel</a>
+</form>
+{% endblock %}

@@ -4,6 +4,7 @@
 
 <div style="margin-bottom: 1rem;">
   <a href="{{ url_for('transactions.add_manual', account_id=account.id) }}" role="button">Add Manual Transaction</a>
+  <a href="{{ url_for('transactions.export_transactions') }}" role="button" class="secondary" style="margin-left: 0.5rem;">Export Transactions</a>
 </div>
 
 <form method="get" class="grid">

@@ -1,5 +1,14 @@
-from wtforms import SubmitField
-from wtforms import StringField, SelectField, FileField, BooleanField, TextAreaField, SubmitField, DateField, DecimalField
+from wtforms import (
+    StringField,
+    SelectField,
+    SelectMultipleField,
+    FileField,
+    BooleanField,
+    TextAreaField,
+    SubmitField,
+    DateField,
+    DecimalField,
+)
 from wtforms.validators import DataRequired, Optional
 from flask_wtf import FlaskForm
 
@@ -76,6 +85,22 @@ class ManualTransactionForm(FlaskForm):
     description_raw = StringField("Description", validators=[DataRequired()], default="Balance Adjustment")
     amount = DecimalField("Amount", validators=[DataRequired()], places=2)
     submit = SubmitField("Add Manual Transaction")
+
+
+class TransactionExportForm(FlaskForm):
+    accounts = SelectMultipleField("Accounts", coerce=int, validators=[DataRequired()])
+    start_date = DateField("Start Date", format='%Y-%m-%d', validators=[Optional()])
+    end_date = DateField("End Date", format='%Y-%m-%d', validators=[Optional()])
+    joint_only = BooleanField("Joint transactions only")
+    submit = SubmitField("Export CSV")
+
+    def validate(self, **kwargs):
+        if not super().validate(**kwargs):
+            return False
+        if self.start_date.data and self.end_date.data and self.end_date.data < self.start_date.data:
+            self.end_date.errors.append("End date must be on or after start date.")
+            return False
+        return True
 
 class RuleForm(FlaskForm):
     """Form for creating and editing categorization rules."""

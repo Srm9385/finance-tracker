@@ -1,11 +1,14 @@
+import csv
+import io
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from sqlalchemy import desc
+
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from sqlalchemy.orm import joinedload
+
 from ..extensions import db
-from ..models import Account, Transaction, Category
-from ..forms import CSRFOnlyForm, ManualTransactionForm
+from ..models import Account, Transaction, Category, Institution
+from ..forms import CSRFOnlyForm, ManualTransactionForm, TransactionExportForm
 from ..utils import to_cents
-import json
 
 bp = Blueprint("transactions", __name__, url_prefix="/transactions")
 
@@ -57,6 +60,79 @@ def list_for_account(account_id):
         categories=categories_list,
         csrf_form=csrf_form
     )
+
+
+@bp.route("/export", methods=["GET", "POST"])
+def export_transactions():
+    form = TransactionExportForm()
+
+    all_accounts = (
+        Account.query
+        .join(Institution, Account.institution_id == Institution.id)
+        .options(joinedload(Account.institution))
+        .order_by(Institution.name.asc(), Account.name.asc(), Account.id.asc())
+        .all()
+    )
+
+    form.accounts.choices = [
+        (account.id, f"{account.institution.name} — {account.name}")
+        for account in all_accounts
+    ]
+
+    if form.validate_on_submit():
+        selected_account_ids = [int(a_id) for a_id in form.accounts.data]
+
+        txn_query = (
+            Transaction.query.options(
+                joinedload(Transaction.account).joinedload(Account.institution),
+                joinedload(Transaction.category),
+            )
+            .filter(
+                Transaction.account_id.in_(selected_account_ids),
+                Transaction.is_deleted == False,
+            )
+        )
+
+        if form.start_date.data:
+            txn_query = txn_query.filter(Transaction.txn_date >= form.start_date.data)
+        if form.end_date.data:
+            txn_query = txn_query.filter(Transaction.txn_date <= form.end_date.data)
+        if form.joint_only.data:
+            txn_query = txn_query.filter(Transaction.is_joint == True)
+
+        transactions = txn_query.order_by(
+            Transaction.txn_date.asc(),
+            Transaction.id.asc(),
+        ).all()
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["date", "description", "amount", "category", "account", "institution"])
+
+        for txn in transactions:
+            account = txn.account
+            institution = account.institution if account else None
+            category_name = txn.category.name if txn.category else ""
+
+            writer.writerow([
+                txn.txn_date.isoformat(),
+                txn.description_raw,
+                f"{txn.amount_cents / 100:.2f}",
+                category_name,
+                account.name if account else "",
+                institution.name if institution else "",
+            ])
+
+        filename = f"transactions-export-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
+        response = Response(
+            output.getvalue(),
+            mimetype="text/csv",
+        )
+        response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+        return response
+
+    return render_template("transactions/export.html", form=form)
+
 @bp.route("/delete/<int:txn_id>", methods=["POST"])
 def delete_single(txn_id):
     t = Transaction.query.get_or_404(txn_id)

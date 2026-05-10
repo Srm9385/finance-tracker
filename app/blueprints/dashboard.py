@@ -49,6 +49,7 @@ def index():
                 Transaction.txn_date <= today,
                 Transaction.is_transfer == False,
                 Transaction.is_deleted == False,
+                Transaction.is_refund == False,
                 Transaction.amount_cents < 0
             ).scalar() or 0
     )
@@ -61,6 +62,7 @@ def index():
             Transaction.txn_date <= today,
             Transaction.is_transfer == False,
             Transaction.is_deleted == False,
+            Transaction.is_refund == False,
             Transaction.amount_cents < 0
         )
         .order_by(Transaction.txn_date.desc(), Transaction.id.desc())
@@ -103,6 +105,7 @@ def chart_data():
         Transaction.txn_date <= end_date,
         Transaction.is_deleted == False,
         Transaction.is_transfer == False,
+        Transaction.is_refund == False,
         Transaction.amount_cents < 0
     )
 
@@ -206,6 +209,7 @@ def income_vs_spending():
         Transaction.txn_date <= end_date,
         Transaction.is_deleted == False,
         Transaction.is_transfer == False,
+        Transaction.is_refund == False,
         Transaction.amount_cents < 0
     )
 

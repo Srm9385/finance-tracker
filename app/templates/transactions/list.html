@@ -87,6 +87,10 @@
         {title: "Description", field: "description_raw", headerSort: true, widthGrow: 2},
         {title: "Amount", field: "amount_cents", sorter: "number", hozAlign: "right", formatter: moneyFormatter, headerSort: true, width: 120},
         {title: "Category", field: "category_id", formatter: categoryFormatter, headerSort: true, widthGrow: 1.5, editor: "select", editorParams: categoryEditorParams},
+        {title: "Comment", field: "comment", headerSort: false, widthGrow: 2, editor: "input", editorParams: {elementAttributes: {maxlength: "500"}}, formatter: function(cell) {
+            const val = cell.getValue();
+            return val ? val : `<span style="color:#aaa;">Add note…</span>`;
+        }},
         {title: "Joint", field: "is_joint", hozAlign: "center", headerSort: true, width: 90, formatter: function(cell) {
             return cell.getValue() ? 'Yes' : 'No';
         }},
@@ -166,6 +170,26 @@
                     cell.restoreOldValue();
                     alert("Error: Could not update category.");
                 }
+            });
+        } else if (field === "comment") {
+            const url = `/transactions/${rowData.id}`;
+            const csrfToken = "{{ csrf_token() }}";
+
+            fetch(url, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken,
+                },
+                body: JSON.stringify({comment: cell.getValue()}),
+            }).then(response => response.json()).then(data => {
+                if (!data.ok) {
+                    cell.restoreOldValue();
+                    alert(`Error: ${data.error || 'Could not save comment.'}`);
+                }
+            }).catch(() => {
+                cell.restoreOldValue();
+                alert('Network error: could not save comment.');
             });
         }
     });

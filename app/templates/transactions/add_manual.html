@@ -27,6 +27,12 @@
     {% for e in form.amount.errors %}<small class="muted">{{ e }}</small>{% endfor %}
   </label>
 
+  <label for="comment">
+    {{ form.comment.label }}
+    {{ form.comment(class="input", rows=3, placeholder="Optional note (max 500 characters)") }}
+    {% for e in form.comment.errors %}<small class="muted">{{ e }}</small>{% endfor %}
+  </label>
+
   <div class="grid">
     {{ form.submit(class="contrast") }}
     <a href="{{ url_for('transactions.list_for_account', account_id=account.id) }}" role="button" class="secondary">Cancel</a>

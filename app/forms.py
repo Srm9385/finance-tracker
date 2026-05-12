@@ -9,7 +9,7 @@ from wtforms import (
     DateField,
     DecimalField,
 )
-from wtforms.validators import DataRequired, Optional
+from wtforms.validators import DataRequired, Optional, Length
 from flask_wtf import FlaskForm
 
 ACCOUNT_TYPES = [
@@ -84,6 +84,7 @@ class ManualTransactionForm(FlaskForm):
     txn_date = DateField("Date", validators=[DataRequired()], format='%Y-%m-%d')
     description_raw = StringField("Description", validators=[DataRequired()], default="Balance Adjustment")
     amount = DecimalField("Amount", validators=[DataRequired()], places=2)
+    comment = TextAreaField("Comment / Notes", validators=[Optional(), Length(max=500)])
     submit = SubmitField("Add Manual Transaction")
 
 

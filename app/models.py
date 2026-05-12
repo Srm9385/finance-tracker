@@ -72,6 +72,7 @@ class Transaction(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     is_deleted = db.Column(db.Boolean, default=False, nullable=False)
     is_refund = db.Column(db.Boolean, default=False)
+    comment = db.Column(db.Text, nullable=True)
     is_joint = db.Column(db.Boolean, default=False, nullable=False)
     deleted_at = db.Column(db.DateTime)
     category_id = db.Column(db.Integer, db.ForeignKey("categories.id"), index=True, nullable=True)

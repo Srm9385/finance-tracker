@@ -7,6 +7,8 @@ from sqlalchemy.orm import joinedload
 
 from ..extensions import db
 from ..models import Account, Transaction, Category, Institution
+from flask_wtf.csrf import validate_csrf
+from wtforms import ValidationError
 from ..forms import CSRFOnlyForm, ManualTransactionForm, TransactionExportForm
 from ..utils import to_cents
 
@@ -40,6 +42,7 @@ def list_for_account(account_id):
             "is_transfer": t.is_transfer,
             "is_refund": t.is_refund,
             "is_joint": t.is_joint,
+            "comment": t.comment or "",
         })
 
     # Sort by name first, then group for a more intuitive dropdown
@@ -107,7 +110,7 @@ def export_transactions():
 
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["date", "description", "amount", "category", "account", "institution"])
+        writer.writerow(["date", "description", "amount", "category", "account", "institution", "comment"])
 
         for txn in transactions:
             account = txn.account
@@ -121,6 +124,7 @@ def export_transactions():
                 category_name,
                 account.name if account else "",
                 institution.name if institution else "",
+                txn.comment or "",
             ])
 
         filename = f"transactions-export-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
@@ -182,6 +186,7 @@ def add_manual(account_id):
             txn_date=form.txn_date.data,
             description_raw=form.description_raw.data,
             amount_cents=to_cents(form.amount.data),
+            comment=form.comment.data or None,
         )
         db.session.add(t)
         db.session.commit()
@@ -189,6 +194,27 @@ def add_manual(account_id):
         return redirect(url_for(".list_for_account", account_id=account.id))
 
     return render_template("transactions/add_manual.html", form=form, account=account)
+
+
+@bp.route("/<int:txn_id>", methods=["PATCH"])
+def update_transaction(txn_id):
+    try:
+        validate_csrf(request.headers.get("X-CSRFToken"))
+    except ValidationError:
+        return jsonify({"ok": False, "error": "CSRF validation failed."}), 400
+
+    data = request.get_json(silent=True) or {}
+    t = Transaction.query.get_or_404(txn_id)
+
+    if "comment" in data:
+        comment = data["comment"]
+        if len(comment) > 500:
+            return jsonify({"ok": False, "error": "Comment exceeds 500 characters."}), 422
+        t.comment = comment or None
+        db.session.commit()
+        return jsonify({"ok": True})
+
+    return jsonify({"ok": False, "error": "No supported field to update."}), 400
 
 
 @bp.route("/toggle_transfer/<int:txn_id>", methods=["POST"])

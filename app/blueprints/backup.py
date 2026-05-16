@@ -65,6 +65,13 @@ def index():
 
                 subprocess.run(psql_cmd, env=env, capture_output=True, text=True, check=True)
 
+                # Stamp initial schema revision (pre-comment), then upgrade so any
+                # schema additions (e.g. comment column) are applied regardless of
+                # whether the backup predates them.
+                from flask_migrate import stamp, upgrade as db_upgrade
+                stamp(revision='fa75b1e7bc89')
+                db_upgrade()
+
                 flash("Database restored successfully.", "success")
                 flash(
                     "IMPORTANT: Remember to manually place the .env file from your backup and restart the application.",

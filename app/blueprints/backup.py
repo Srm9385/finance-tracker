@@ -65,12 +65,25 @@ def index():
 
                 subprocess.run(psql_cmd, env=env, capture_output=True, text=True, check=True)
 
-                # Stamp initial schema revision (pre-comment), then upgrade so any
-                # schema additions (e.g. comment column) are applied regardless of
-                # whether the backup predates them.
-                from flask_migrate import stamp, upgrade as db_upgrade
-                stamp(revision='fa75b1e7bc89')
-                db_upgrade()
+                # Apply schema additions not present in older backups and sync
+                # alembic_version to the current head. All ops are idempotent.
+                from alembic.script import ScriptDirectory
+                from alembic.config import Config as AlembicConfig
+                from ..extensions import db
+                migrations_dir = os.path.join(current_app.root_path, '..', 'migrations')
+                alembic_cfg = AlembicConfig()
+                alembic_cfg.set_main_option('script_location', migrations_dir)
+                head_revision = ScriptDirectory.from_config(alembic_cfg).get_current_head()
+
+                with db.engine.connect() as conn:
+                    conn.execute(db.text(
+                        "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS comment TEXT"
+                    ))
+                    conn.execute(db.text("DELETE FROM alembic_version"))
+                    conn.execute(db.text(
+                        "INSERT INTO alembic_version (version_num) VALUES (:rev)"
+                    ), {"rev": head_revision})
+                    conn.commit()
 
                 flash("Database restored successfully.", "success")
                 flash(

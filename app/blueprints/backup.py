@@ -1,4 +1,4 @@
-# srm9385/finance-tracker/finance-tracker-b6479a0b9b4b550a18703e80c76c724f6985583c/app/blueprints/backup.py
+# app/blueprints/backup.py
 import os
 import subprocess
 import tempfile
@@ -7,22 +7,31 @@ from datetime import datetime
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, flash, current_app, send_from_directory)
 from werkzeug.utils import secure_filename
+from ..extensions import db
 from ..forms import RestoreForm
 
 bp = Blueprint("backup", __name__, url_prefix="/backup")
 
 
 def get_db_connection_args():
-    # (This helper function remains the same)
     db_url = current_app.config["SQLALCHEMY_DATABASE_URI"]
     try:
-        from urllib.parse import urlparse
+        from urllib.parse import urlparse, unquote
         parsed = urlparse(db_url)
-        return {"user": parsed.username, "password": parsed.password, "host": parsed.hostname,
-                "port": str(parsed.port or 5432), "dbname": parsed.path.lstrip('/')}
+        return {"user": unquote(parsed.username or ""),
+                "password": unquote(parsed.password or ""),
+                "host": parsed.hostname,
+                "port": str(parsed.port or 5432),
+                "dbname": parsed.path.lstrip('/')}
     except Exception as e:
         flash(f"Could not parse DATABASE_URL: {e}", "error")
         return None
+
+
+def _pg_env(conn_args):
+    env = os.environ.copy()
+    env["PGPASSWORD"] = conn_args["password"] or ""
+    return env
 
 
 @bp.route("/", methods=["GET", "POST"])
@@ -30,40 +39,57 @@ def index():
     form = RestoreForm()
     if form.validate_on_submit():
         file = form.backup_file.data
-        filename = secure_filename(file.filename)
-
-        if not filename.endswith(".tar.gz"):
-            flash("Invalid file type. Please upload a .tar.gz file.", "error")
-            return redirect(url_for(".index"))
+        filename = secure_filename(file.filename) or "upload.tar.gz"
 
         conn_args = get_db_connection_args()
         if not conn_args:
             return redirect(url_for(".index"))
 
-        # --- START MODIFICATION: Handle tar.gz extraction ---
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_archive_path = os.path.join(temp_dir, filename)
             file.save(temp_archive_path)
 
             try:
-                # Extract the archive
-                with tarfile.open(temp_archive_path, "r:gz") as tar:
-                    # Look for the .sql file within the archive
-                    sql_file_member = next((m for m in tar.getmembers() if m.name.endswith(".sql")), None)
+                # Open with "r:*" so a .tar, .tar.gz or .tgz all work. Browsers
+                # (notably Safari with "open safe files") transparently gunzip
+                # downloads, so the archive we get back is often a plain tar.
+                try:
+                    tar = tarfile.open(temp_archive_path, "r:*")
+                except tarfile.ReadError:
+                    raise ValueError(
+                        "That file is not a readable tar archive. Upload the "
+                        "archive produced by 'Create Backup'."
+                    )
+
+                extract_dir = os.path.join(temp_dir, "extracted")
+                with tar:
+                    sql_file_member = next(
+                        (m for m in tar.getmembers()
+                         if m.isfile() and m.name.endswith(".sql")), None)
                     if not sql_file_member:
                         raise ValueError("No .sql file found in the backup archive.")
 
-                    tar.extract(sql_file_member, path=temp_dir)
-                    temp_sql_path = os.path.join(temp_dir, sql_file_member.name)
+                    # filter="data" strips absolute/".." paths and unsafe metadata.
+                    tar.extract(sql_file_member, path=extract_dir, filter="data")
 
-                # Restore the database from the extracted .sql file
+                temp_sql_path = os.path.join(extract_dir, sql_file_member.name)
+
+                # Release pooled connections first: the dump's DROP TABLE
+                # statements need an ACCESS EXCLUSIVE lock and will block
+                # forever behind an idle SQLAlchemy connection.
+                db.session.remove()
+                db.engine.dispose()
+
+                # ON_ERROR_STOP + single-transaction: without these psql exits 0
+                # even when every statement fails, so a broken restore was being
+                # reported as a success.
                 psql_cmd = ["psql", "-h", conn_args["host"], "-p", conn_args["port"],
-                            "-U", conn_args["user"], "-d", conn_args["dbname"], "-f", temp_sql_path]
+                            "-U", conn_args["user"], "-d", conn_args["dbname"],
+                            "-v", "ON_ERROR_STOP=1", "--single-transaction",
+                            "-f", temp_sql_path]
 
-                env = os.environ.copy()
-                env["PGPASSWORD"] = conn_args["password"]
-
-                subprocess.run(psql_cmd, env=env, capture_output=True, text=True, check=True)
+                subprocess.run(psql_cmd, env=_pg_env(conn_args),
+                               capture_output=True, text=True, check=True)
 
                 flash("Database restored successfully.", "success")
                 flash(
@@ -72,10 +98,9 @@ def index():
 
             except subprocess.CalledProcessError as e:
                 flash("An error occurred during the database restore.", "error")
-                flash(f"STDERR: {e.stderr}", "error")
+                flash(f"STDERR: {(e.stderr or '').strip() or 'no output'}", "error")
             except Exception as e:
                 flash(f"An unexpected error occurred: {e}", "error")
-        # --- END MODIFICATION ---
 
         return redirect(url_for(".index"))
 
@@ -93,7 +118,6 @@ def create_backup():
 
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
 
-    # --- START MODIFICATION: Handle tar.gz creation ---
     archive_filename = f"financetracker_backup_{timestamp}.tar.gz"
     archive_filepath = os.path.join(backup_dir, archive_filename)
 
@@ -108,28 +132,29 @@ def create_backup():
                           "--exclude-table=alembic_version",
                           "--clean", "--if-exists", "-f", sql_filepath]
 
-            env = os.environ.copy()
-            env["PGPASSWORD"] = conn_args["password"]
-
-            subprocess.run(pgdump_cmd, env=env, check=True)
+            subprocess.run(pgdump_cmd, env=_pg_env(conn_args),
+                           capture_output=True, text=True, check=True)
 
             # 2. Copy the .env file into the temp directory
             env_filepath = os.path.join(current_app.root_path, '..', '.env')
             if os.path.exists(env_filepath):
-                subprocess.run(["cp", env_filepath, temp_dir])
+                subprocess.run(["cp", env_filepath, temp_dir], check=True)
 
             # 3. Create the tar.gz archive from the temp directory's contents
             with tarfile.open(archive_filepath, "w:gz") as tar:
                 tar.add(temp_dir, arcname=os.path.basename(f"backup_{timestamp}"))
 
-            flash(f"Backup archive created: {archive_filename}", "success")
-            return send_from_directory(directory=backup_dir, path=archive_filename, as_attachment=True)
+            # mimetypes guesses "application/x-tar" + gzip encoding for a
+            # .tar.gz name, which makes browsers decompress the download and
+            # hand back a plain .tar. Declaring it as gzip keeps it intact.
+            return send_from_directory(directory=backup_dir, path=archive_filename,
+                                       as_attachment=True,
+                                       mimetype="application/gzip")
 
         except subprocess.CalledProcessError as e:
             flash("An error occurred during the backup process.", "error")
-            flash(f"STDERR: {e.stderr}", "error")
+            flash(f"STDERR: {(e.stderr or '').strip() or 'no output'}", "error")
         except Exception as e:
             flash(f"An unexpected error occurred: {e}", "error")
-    # --- END MODIFICATION ---
 
     return redirect(url_for(".index"))

@@ -124,7 +124,7 @@ class RefundKeywordForm(FlaskForm):
 class RestoreForm(FlaskForm):
     """Form for uploading a database backup file."""
     # --- START MODIFICATION ---
-    backup_file = FileField("Backup Archive (.tar.gz)", validators=[DataRequired()])    # --- END MODIFICATION ---
+    backup_file = FileField("Backup Archive (.tar.gz or .tar)", validators=[DataRequired()])    # --- END MODIFICATION ---
     submit = SubmitField("Restore from Backup")
 
 class RefundFinderForm(FlaskForm):

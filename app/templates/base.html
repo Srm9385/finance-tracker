@@ -55,6 +55,7 @@
     </ul>
     <ul>
       <li><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+      <li><a href="{{ url_for('transactions.browse') }}">Transactions</a></li>
       <li><a href="{{ url_for('imports.upload') }}">Import</a></li>
       <li><a href="{{ url_for('imports.history') }}">Import History</a></li>
       {% if g.ai_configured %}

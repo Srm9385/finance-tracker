@@ -1,16 +1,17 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>{{ account.institution.name }} — {{ account.name }}</h2>
+{% if single_account %}
+<h2>{{ single_account.institution.name }} — {{ single_account.name }}</h2>
+{% else %}
+<h2>Transactions</h2>
+{% endif %}
 
 <div style="margin-bottom: 1rem;">
-  <a href="{{ url_for('transactions.add_manual', account_id=account.id) }}" role="button">Add Manual Transaction</a>
+  {% if single_account %}
+  <a href="{{ url_for('transactions.add_manual', account_id=single_account.id) }}" role="button">Add Manual Transaction</a>
+  {% endif %}
   <a href="{{ url_for('transactions.export_transactions') }}" role="button" class="secondary" style="margin-left: 0.5rem;">Export Transactions</a>
 </div>
-
-<form method="get" class="grid">
-  <input type="text" name="q" value="{{ q }}" placeholder="Search description…">
-  <button class="secondary" type="submit">Search</button>
-</form>
 
 <link href="{{ url_for('static', filename='vendor/tabulator/css/tabulator.min.css') }}" rel="stylesheet">
 <style>
@@ -34,7 +35,103 @@
   }
   /* variableHeight grows the row when the buttons wrap, so nothing gets cut off. */
   .tabulator .tabulator-cell.txn-actions-cell { white-space: normal; }
+
+  .filter-panel { margin-bottom: 1rem; }
+  .filter-panel summary { font-weight: bold; }
+  .checkbox-container {
+    max-height: 220px;
+    overflow-y: auto;
+    border: 1px solid var(--pico-form-element-border-color);
+    border-radius: var(--pico-border-radius);
+    padding: 0.5rem 0.75rem;
+  }
+  .checkbox-container fieldset { margin-bottom: 0.5rem; }
+  .checkbox-container legend {
+    font-size: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--pico-muted-color);
+    padding: 0;
+  }
+  .checkbox-container label {
+    display: block;
+    margin-bottom: 0.15rem;
+    font-size: 0.9em;
+  }
+  .filter-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  .filter-actions button, .filter-actions a { margin: 0; width: auto; }
 </style>
+
+<details class="filter-panel" open>
+  <summary>Filters</summary>
+  <form method="get" action="{{ url_for('transactions.browse') }}">
+    <div class="grid">
+      <div>
+        <label for="account-filter">Accounts <span class="muted">({{ selected_account_ids|length or 'all' }} of {{ total_accounts }})</span></label>
+        <div class="checkbox-container" id="account-filter">
+          {% for group in account_groups %}
+          <fieldset>
+            <legend>{{ group.institution }}</legend>
+            {% for account in group.accounts %}
+            <label>
+              <input type="checkbox" name="account_id" value="{{ account.id }}"
+                     {% if account.id in selected_account_ids %}checked{% endif %}>
+              {{ account.name }}
+            </label>
+            {% endfor %}
+          </fieldset>
+          {% else %}
+          <p class="muted">No accounts yet.</p>
+          {% endfor %}
+        </div>
+        <small class="muted">Leave all unchecked to include every account.</small>
+      </div>
+
+      <div>
+        <label for="category-filter">Categories</label>
+        <div class="checkbox-container" id="category-filter">
+          <label>
+            <input type="checkbox" name="category_id" value="{{ uncategorized_value }}"
+                   {% if include_uncategorized %}checked{% endif %}>
+            Uncategorized
+          </label>
+          {% for group in category_groups %}
+          <fieldset>
+            <legend>{{ group.group }}</legend>
+            {% for category in group.categories %}
+            <label>
+              <input type="checkbox" name="category_id" value="{{ category.id }}"
+                     {% if category.id in selected_category_ids %}checked{% endif %}>
+              {{ category.name }}
+            </label>
+            {% endfor %}
+          </fieldset>
+          {% endfor %}
+        </div>
+        <small class="muted">Leave all unchecked to include every category.</small>
+      </div>
+
+      <div>
+        <label for="q">Search description</label>
+        <input type="text" id="q" name="q" value="{{ q }}" placeholder="Search description…">
+
+        <label for="joint">Joint</label>
+        <select id="joint" name="joint">
+          <option value="" {% if joint == '' %}selected{% endif %}>All transactions</option>
+          <option value="yes" {% if joint == 'yes' %}selected{% endif %}>Joint only</option>
+          <option value="no" {% if joint == 'no' %}selected{% endif %}>Non-joint only</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="filter-actions">
+      <button type="submit">Apply Filters</button>
+      <a href="{{ url_for('transactions.browse') }}" role="button" class="secondary outline">Clear</a>
+      <span class="muted">{{ table_data|length }} transaction{{ '' if table_data|length == 1 else 's' }}</span>
+    </div>
+  </form>
+</details>
+
 <div id="transaction-table" style="margin-top: 1rem;"></div>
 {% endblock %}
 
@@ -43,6 +140,8 @@
   document.addEventListener('DOMContentLoaded', function() {
     const tableData = {{ table_data | tojson }};
     const categories = {{ categories | tojson }};
+    // Where delete / category edits should send the browser back to.
+    const returnTo = window.location.pathname + window.location.search;
 
     const categoryLookup = {};
     categories.forEach(cat => {
@@ -77,8 +176,10 @@
         deleteForm.onsubmit = () => confirm('Delete this transaction?');
         deleteForm.innerHTML = `
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="next">
             <button type="submit" class="secondary outline" title="Delete this transaction">Delete</button>
         `;
+        deleteForm.querySelector('input[name="next"]').value = returnTo;
         container.appendChild(deleteForm);
 
         // Toggles keep a short label so all of them fit; the active state is shown
@@ -105,6 +206,8 @@
       tabulatorClass: "tabulator-pico",
       columns: [
         {title: "Date", field: "txn_date", sorter: "date", width: 120, headerSort: true, sorterParams:{format:"yyyy-MM-dd"}},
+        {title: "Account", field: "account_label", headerSort: true, widthGrow: 1,
+         visible: {{ 'false' if single_account else 'true' }}},
         {title: "Description", field: "description_raw", headerSort: true, widthGrow: 2},
         {title: "Amount", field: "amount_cents", sorter: "number", hozAlign: "right", formatter: moneyFormatter, headerSort: true, width: 120},
         {title: "Category", field: "category_id", formatter: categoryFormatter, headerSort: true, widthGrow: 1.5, editor: "select", editorParams: categoryEditorParams},
@@ -182,6 +285,7 @@
 
             fetch(url, {
                 method: 'POST',
+                headers: {'X-Requested-With': 'XMLHttpRequest'},
                 body: formData
             }).then(response => {
                 if (!response.ok) {

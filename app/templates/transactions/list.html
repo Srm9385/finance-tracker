@@ -13,6 +13,28 @@
 </form>
 
 <link href="{{ url_for('static', filename='vendor/tabulator/css/tabulator.min.css') }}" rel="stylesheet">
+<style>
+  /* Keep every action visible: wrap instead of clipping inside the cell. */
+  .txn-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    justify-content: center;
+    align-items: center;
+    padding: 0.2rem 0;
+  }
+  .txn-actions form { margin: 0; }
+  .txn-actions button {
+    margin: 0;
+    padding: 4px 8px;
+    font-size: 0.75em;
+    line-height: 1.2;
+    white-space: nowrap;
+    width: auto;
+  }
+  /* variableHeight grows the row when the buttons wrap, so nothing gets cut off. */
+  .tabulator .tabulator-cell.txn-actions-cell { white-space: normal; }
+</style>
 <div id="transaction-table" style="margin-top: 1rem;"></div>
 {% endblock %}
 
@@ -45,35 +67,34 @@
 
     const actionsFormatter = function(cell, formatterParams, onRendered) {
         const t = cell.getRow().getData();
-        const transferText = t.is_transfer ? 'Unmark Transfer' : 'Mark as Transfer';
-        const refundText = t.is_refund ? 'Unmark Refund' : 'Mark as Refund';
-        const jointText = t.is_joint ? 'Unmark Joint' : 'Mark as Joint';
 
         const container = document.createElement("div");
+        container.className = 'txn-actions';
 
         const deleteForm = document.createElement('form');
         deleteForm.method = 'post';
         deleteForm.action = `{{ url_for('transactions.delete_single', txn_id=0) }}`.replace('0', t.id);
-        deleteForm.style.display = 'inline-block';
         deleteForm.onsubmit = () => confirm('Delete this transaction?');
         deleteForm.innerHTML = `
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="secondary outline" style="padding: 5px 10px; font-size: 0.8em;">Delete</button>
+            <button type="submit" class="secondary outline" title="Delete this transaction">Delete</button>
         `;
         container.appendChild(deleteForm);
 
-        const createAsyncButton = (text, action) => {
+        // Toggles keep a short label so all of them fit; the active state is shown
+        // by a checkmark plus a solid (non-outline) button.
+        const createToggleButton = (label, action, isActive) => {
             const button = document.createElement('button');
-            button.innerText = text;
-            button.className = 'secondary outline';
-            button.style.cssText = 'padding: 5px 10px; font-size: 0.8em; margin-left: 0.5rem;';
+            button.innerText = isActive ? `✓ ${label}` : label;
+            button.className = isActive ? 'contrast' : 'secondary outline';
+            button.title = `${isActive ? 'Unmark as' : 'Mark as'} ${label.toLowerCase()}`;
             button.dataset.action = action;
             return button;
         };
 
-        container.appendChild(createAsyncButton(transferText, 'toggle_transfer'));
-        container.appendChild(createAsyncButton(refundText, 'toggle_refund'));
-        container.appendChild(createAsyncButton(jointText, 'toggle_joint'));
+        container.appendChild(createToggleButton('Transfer', 'toggle_transfer', t.is_transfer));
+        container.appendChild(createToggleButton('Refund', 'toggle_refund', t.is_refund));
+        container.appendChild(createToggleButton('Joint', 'toggle_joint', t.is_joint));
 
         return container;
     };
@@ -98,7 +119,8 @@
             }
             return `<span class="muted">Manual</span>`;
         }},
-        {title: "Actions", formatter: actionsFormatter, hozAlign: "center", headerSort: false, resizable: false, width: 360,
+        {title: "Actions", formatter: actionsFormatter, hozAlign: "center", headerSort: false, resizable: false,
+         width: 300, minWidth: 300, variableHeight: true, cssClass: "txn-actions-cell",
          cellClick: function(e, cell) {
             const target = e.target;
             if (target.tagName === 'BUTTON' && target.dataset.action) {

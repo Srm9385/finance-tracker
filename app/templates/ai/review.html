@@ -3,6 +3,18 @@
 <h2>Review AI Suggestions</h2>
 <p>Review the suggestions below. Uncheck a box to reveal a dropdown for manual categorization.</p>
 
+<style>
+  /* Keep each action on one line so all three stay readable in a narrow column. */
+  td.txn-actions label {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+    margin-bottom: 0.25rem;
+  }
+  td.txn-actions label input[type="checkbox"] { margin: 0; }
+</style>
+
 <form method="post" action="{{ url_for('ai.apply_suggestions') }}">
       {{ form.hidden_tag() }}
   <table>
@@ -38,7 +50,7 @@
           </select>
         </td>
         <td><em>{{ s.reason }}</em></td>
-       <td>
+       <td class="txn-actions">
           <label>
             {% set checked = namespace(value=false) %}
             {% for keyword in transfer_keywords %}
@@ -60,6 +72,11 @@
             {% endfor %}
             <input type="checkbox" name="mark_as_refund" value="{{ t.id }}" {% if checked.value %}checked{% endif %}>
             Mark as Refund
+          </label>
+          <label>
+            {# No joint keywords exist, so this reflects (and toggles) the transaction's current flag. #}
+            <input type="checkbox" name="mark_as_joint" value="{{ t.id }}" {% if t.is_joint %}checked{% endif %}>
+            Mark as Joint
           </label>
         </td>
       </tr>

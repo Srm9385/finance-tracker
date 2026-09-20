@@ -144,10 +144,7 @@ def apply_suggestions():
     }
     transfer_ids = set(request.form.getlist("mark_as_transfer"))
     refund_ids = set(request.form.getlist("mark_as_refund"))
-
-    if not approved_ids and not manual_overrides and not transfer_ids and not refund_ids:
-        flash("No suggestions were approved, manually set, marked as transfers, or marked as refunds.", "info")
-        return redirect(url_for('.categorize'))
+    joint_ids = set(request.form.getlist("mark_as_joint"))
 
     suggestion_map = {s['id']: s['category_name'] for s in suggestions}
     category_map = {c.id: c for c in Category.query.all()}
@@ -156,6 +153,8 @@ def apply_suggestions():
     count = 0
     transfer_count = 0
     refund_count = 0
+    joint_count = 0
+    unjoint_count = 0
     all_txn_ids = [s['id'] for s in suggestions]
     transactions_to_update = Transaction.query.filter(Transaction.id.in_(all_txn_ids)).all()
 
@@ -172,6 +171,16 @@ def apply_suggestions():
                 transaction.is_refund = True
                 refund_count += 1
 
+        # The joint checkbox is pre-filled from the transaction's current flag,
+        # so submitting it applies in both directions.
+        should_be_joint = str(txn_id) in joint_ids
+        if should_be_joint != transaction.is_joint:
+            transaction.is_joint = should_be_joint
+            if should_be_joint:
+                joint_count += 1
+            else:
+                unjoint_count += 1
+
         if txn_id in manual_overrides:
             cat_id = manual_overrides[txn_id]
             if cat_id in category_map:
@@ -183,14 +192,25 @@ def apply_suggestions():
                 transaction.category_id = category_name_map[suggested_cat_name].id
                 count += 1
 
+    if not any([count, transfer_count, refund_count, joint_count, unjoint_count]):
+        db.session.rollback()
+        flash("No suggestions were approved, manually set, or flagged as transfers, refunds, or joint.", "info")
+        return redirect(url_for('.categorize'))
+
     db.session.commit()
     session.pop('ai_suggestions', None)
 
     flash_messages = []
+    if count > 0:
+        flash_messages.append(f"Updated categories for {count} transactions.")
     if transfer_count > 0:
         flash_messages.append(f"Marked {transfer_count} transactions as transfers.")
     if refund_count > 0:
         flash_messages.append(f"Marked {refund_count} transactions as refunds.")
+    if joint_count > 0:
+        flash_messages.append(f"Marked {joint_count} transactions as joint.")
+    if unjoint_count > 0:
+        flash_messages.append(f"Unmarked {unjoint_count} transactions as joint.")
 
     if flash_messages:
         flash(" ".join(flash_messages), "success")
